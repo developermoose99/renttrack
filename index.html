@@ -3,1459 +3,1141 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RentTrack — Property Manager</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>RentTrack</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg: #080a0f;
-  --bg2: #0d1017;
-  --surface: #111520;
-  --surface2: #181d2e;
-  --surface3: #1e2438;
-  --border: #252d45;
-  --border2: #2e3a58;
-  --accent: #4f8eff;
-  --accent-glow: rgba(79,142,255,0.15);
-  --accent2: #ff6b35;
-  --accent3: #00e5a0;
-  --text: #e8edf8;
-  --text2: #8892b0;
-  --text3: #4a5568;
-  --green: #00e5a0;
-  --red: #ff4757;
-  --yellow: #ffd32a;
-  --purple: #a855f7;
-  --r: 14px;
-  --r-sm: 8px;
+:root{
+  --bg:#07090f;--s1:#0f1219;--s2:#161b27;--s3:#1c2235;
+  --br:#232c42;--br2:#2d3a58;
+  --acc:#4f8eff;--acc-g:rgba(79,142,255,.12);
+  --grn:#00e5a0;--red:#ff4757;--ylw:#ffd32a;--pur:#a855f7;--org:#ff6b35;
+  --t1:#e8edf8;--t2:#8892b0;--t3:#4a5568;
+  --r:14px;--rs:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;}
-body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;overflow-x:hidden;}
 
-/* ── ANIMATED BG ── */
-.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(79,142,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(79,142,255,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
-.bg-orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
-.bg-orb1{width:600px;height:600px;background:rgba(79,142,255,0.06);top:-200px;right:-100px;}
-.bg-orb2{width:400px;height:400px;background:rgba(0,229,160,0.04);bottom:-100px;left:-100px;}
+/* BG */
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(79,142,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(79,142,255,.025) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0;}
+.bg-blob{position:fixed;border-radius:50%;filter:blur(130px);pointer-events:none;z-index:0;opacity:.5;}
+.bb1{width:500px;height:500px;background:rgba(79,142,255,.07);top:-150px;right:-100px;}
+.bb2{width:350px;height:350px;background:rgba(0,229,160,.05);bottom:-80px;left:-80px;}
 
-/* ── AUTH SCREEN ── */
-#authScreen{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:var(--bg);}
-.auth-card{width:420px;max-width:95vw;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;position:relative;z-index:1;animation:slideUp 0.5s ease;}
-@keyframes slideUp{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);}}
-.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px;}
-.auth-logo-mark{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),#7b5ea7);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;}
-.auth-logo-text{font-family:'Playfair Display',serif;font-size:1.4rem;letter-spacing:-0.02em;}
-.auth-logo-sub{font-size:0.65rem;color:var(--text3);letter-spacing:0.12em;text-transform:uppercase;}
-.auth-title{font-family:'Playfair Display',serif;font-size:1.6rem;margin-bottom:6px;}
-.auth-sub{font-size:0.82rem;color:var(--text2);margin-bottom:28px;line-height:1.5;}
-.auth-tabs{display:flex;gap:0;background:var(--bg2);border-radius:var(--r-sm);padding:3px;margin-bottom:24px;border:1px solid var(--border);}
-.auth-tab{flex:1;padding:9px;text-align:center;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;color:var(--text2);transition:all 0.2s;}
-.auth-tab.active{background:var(--accent);color:#fff;}
-.setup-notice{background:rgba(79,142,255,0.08);border:1px solid rgba(79,142,255,0.2);border-radius:var(--r-sm);padding:14px;margin-bottom:20px;font-size:0.76rem;color:var(--text2);line-height:1.6;}
-.setup-notice strong{color:var(--accent);}
-.setup-notice code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--accent3);}
-
-/* ── CONFIG PANEL ── */
-.config-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;margin-bottom:16px;}
-.config-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);margin-bottom:8px;font-weight:700;}
-.config-row{display:flex;gap:8px;align-items:center;}
-.config-input{font-family:'Space Grotesk',sans-serif;flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--r-sm);font-size:0.78rem;outline:none;transition:border-color 0.15s;}
-.config-input:focus{border-color:var(--accent);}
-.config-input::placeholder{color:var(--text3);}
-.config-saved{font-size:0.7rem;color:var(--green);display:none;}
+/* ── AUTH ── */
+#auth{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;}
+.auth-wrap{width:400px;max-width:95vw;position:relative;z-index:1;}
+.auth-card{background:var(--s1);border:1px solid var(--br);border-radius:20px;padding:36px;animation:up .45s cubic-bezier(.22,1,.36,1);}
+@keyframes up{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+.auth-logo{display:flex;align-items:center;gap:11px;margin-bottom:28px;}
+.auth-mark{width:40px;height:40px;background:linear-gradient(135deg,var(--acc),#7c3aed);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;}
+.auth-brand{font-family:'Playfair Display',serif;font-size:1.3rem;}
+.auth-sub{font-size:.62rem;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;}
+.auth-tabs{display:flex;background:var(--bg);border:1px solid var(--br);border-radius:var(--rs);padding:3px;margin-bottom:22px;}
+.auth-tab{flex:1;padding:8px;text-align:center;border-radius:6px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--t2);transition:all .18s;}
+.auth-tab.on{background:var(--acc);color:#fff;}
 
 /* ── FORMS ── */
-.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
-.form-group.row{flex-direction:row;gap:12px;}
-.form-group.row .form-group{flex:1;margin-bottom:0;}
-label{font-size:0.67rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--text2);font-weight:600;}
-input,select,textarea{font-family:'Space Grotesk',sans-serif;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--r-sm);font-size:0.85rem;outline:none;transition:all 0.15s;width:100%;}
-input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
-input::placeholder,textarea::placeholder{color:var(--text3);}
+.fg{display:flex;flex-direction:column;gap:12px;}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fg2 .full{grid-column:1/-1;}
+.fgrp{display:flex;flex-direction:column;gap:5px;}
+label{font-size:.65rem;text-transform:uppercase;letter-spacing:.09em;color:var(--t2);font-weight:600;}
+input,select,textarea{font-family:'Space Grotesk',sans-serif;background:var(--bg);border:1px solid var(--br);color:var(--t1);padding:10px 13px;border-radius:var(--rs);font-size:.84rem;outline:none;transition:all .15s;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-g);}
+input::placeholder,textarea::placeholder{color:var(--t3);}
 select option{background:var(--bg);}
-textarea{resize:vertical;min-height:65px;}
-.err-msg{font-size:0.72rem;color:var(--red);margin-top:6px;display:none;}
-.err-msg.show{display:block;}
+textarea{resize:vertical;min-height:62px;}
+.err{font-size:.72rem;color:var(--red);margin-top:2px;display:none;}
+.err.on{display:block;}
 
 /* ── BUTTONS ── */
-.btn{font-family:'Space Grotesk',sans-serif;padding:10px 20px;border-radius:var(--r-sm);font-size:0.82rem;font-weight:600;cursor:pointer;border:none;transition:all 0.18s;letter-spacing:0.02em;display:inline-flex;align-items:center;gap:7px;}
-.btn-primary{background:linear-gradient(135deg,var(--accent),#3a6fd4);color:#fff;width:100%;justify-content:center;}
-.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(79,142,255,0.3);}
-.btn-primary:active{transform:translateY(0);}
-.btn-accent{background:linear-gradient(135deg,var(--accent),#3a6fd4);color:#fff;}
-.btn-accent:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(79,142,255,0.3);}
-.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}
-.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
-.btn-danger{background:rgba(255,71,87,0.12);color:var(--red);border:1px solid rgba(255,71,87,0.2);}
-.btn-danger:hover{background:rgba(255,71,87,0.2);}
-.btn-green{background:rgba(0,229,160,0.1);color:var(--green);border:1px solid rgba(0,229,160,0.2);}
-.btn-green:hover{background:rgba(0,229,160,0.18);}
-.btn-sm{padding:6px 13px;font-size:0.74rem;}
-.btn-xs{padding:4px 10px;font-size:0.68rem;}
+.btn{font-family:'Space Grotesk',sans-serif;padding:9px 18px;border-radius:var(--rs);font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:all .18s;display:inline-flex;align-items:center;gap:7px;letter-spacing:.01em;}
+.btn-blue{background:linear-gradient(135deg,#4f8eff,#3a6fd4);color:#fff;width:100%;justify-content:center;}
+.btn-blue:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(79,142,255,.3);}
+.btn-acc{background:linear-gradient(135deg,#4f8eff,#3a6fd4);color:#fff;}
+.btn-acc:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(79,142,255,.3);}
+.btn-ghost{background:transparent;color:var(--t2);border:1px solid var(--br);}
+.btn-ghost:hover{border-color:var(--acc);color:var(--acc);}
+.btn-red{background:rgba(255,71,87,.1);color:var(--red);border:1px solid rgba(255,71,87,.2);}
+.btn-red:hover{background:rgba(255,71,87,.18);}
+.btn-grn{background:rgba(0,229,160,.1);color:var(--grn);border:1px solid rgba(0,229,160,.2);}
+.btn-grn:hover{background:rgba(0,229,160,.18);}
+.btn-sm{padding:5px 12px;font-size:.72rem;}
+.btn-xs{padding:3px 9px;font-size:.67rem;}
 .btn-full{width:100%;justify-content:center;}
-.btn-loading{opacity:0.7;pointer-events:none;}
+.dim{opacity:.6;pointer-events:none;}
 
-/* ── APP LAYOUT ── */
-#appScreen{display:none;position:relative;z-index:1;}
-.topbar{padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(8,10,15,0.85);backdrop-filter:blur(20px);position:sticky;top:0;z-index:100;}
-.logo{display:flex;align-items:center;gap:10px;cursor:pointer;}
-.logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),#7b5ea7);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1rem;}
-.logo-text{font-family:'Playfair Display',serif;font-size:1.1rem;letter-spacing:-0.02em;}
-.topbar-center{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px;}
-.top-tab{padding:7px 16px;border-radius:6px;font-size:0.77rem;font-weight:600;cursor:pointer;color:var(--text2);transition:all 0.15s;}
-.top-tab.active{background:var(--accent);color:#fff;}
-.top-tab:hover:not(.active){color:var(--text);}
-.topbar-right{display:flex;align-items:center;gap:10px;}
-.user-pill{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 12px 5px 5px;cursor:pointer;transition:border-color 0.15s;}
-.user-pill:hover{border-color:var(--border2);}
-.user-avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:#fff;}
-.user-name{font-size:0.75rem;font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);}
-.sync-dot.syncing{animation:pulse 1s infinite;}
-.sync-dot.error{background:var(--red);box-shadow:0 0 6px var(--red);}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+/* ── APP ── */
+#app{display:none;position:relative;z-index:1;}
+.topbar{padding:13px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--br);background:rgba(7,9,15,.88);backdrop-filter:blur(20px);position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:9px;cursor:pointer;}
+.logo-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--acc),#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.95rem;}
+.logo-txt{font-family:'Playfair Display',serif;font-size:1.05rem;}
+.top-nav{display:flex;gap:3px;background:var(--s1);border:1px solid var(--br);border-radius:var(--rs);padding:3px;}
+.tnav{padding:6px 14px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;color:var(--t2);transition:all .15s;}
+.tnav.on{background:var(--acc);color:#fff;}
+.tnav:hover:not(.on){color:var(--t1);}
+.top-right{display:flex;align-items:center;gap:9px;}
+.user-chip{display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--br);border-radius:20px;padding:4px 12px 4px 4px;cursor:pointer;transition:border-color .15s;}
+.user-chip:hover{border-color:var(--br2);}
+.uav{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--pur));display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;}
+.uname{font-size:.73rem;font-weight:600;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
-/* ── SIDEBAR ── */
-.app-body{display:flex;}
-.sidebar{width:210px;min-height:calc(100vh - 57px);background:var(--surface);border-right:1px solid var(--border);padding:14px 10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:57px;height:calc(100vh - 57px);overflow-y:auto;}
-.sidebar-section{font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text3);padding:10px 10px 4px;font-weight:700;}
-.nav-item{padding:8px 11px;border-radius:var(--r-sm);cursor:pointer;font-size:0.79rem;font-weight:500;color:var(--text2);transition:all 0.15s;display:flex;align-items:center;gap:9px;position:relative;}
-.nav-item:hover{background:var(--surface2);color:var(--text);}
-.nav-item.active{background:var(--accent-glow);color:var(--accent);border-left:2px solid var(--accent);}
-.nav-icon{font-size:0.85rem;width:18px;text-align:center;}
-.nav-badge{margin-left:auto;background:var(--surface3);color:var(--text3);font-size:0.6rem;padding:2px 6px;border-radius:8px;font-weight:700;}
-.nav-item.active .nav-badge{background:rgba(79,142,255,0.15);color:var(--accent);}
+/* ── LAYOUT ── */
+.body{display:flex;}
+.side{width:206px;min-height:calc(100vh - 56px);background:var(--s1);border-right:1px solid var(--br);padding:12px 9px;display:flex;flex-direction:column;gap:2px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;}
+.side-lbl{font-size:.57rem;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);padding:9px 10px 3px;font-weight:700;}
+.nav{padding:7px 10px;border-radius:var(--rs);cursor:pointer;font-size:.77rem;font-weight:500;color:var(--t2);transition:all .14s;display:flex;align-items:center;gap:8px;}
+.nav:hover{background:var(--s2);color:var(--t1);}
+.nav.on{background:var(--acc-g);color:var(--acc);border-left:2px solid var(--acc);padding-left:8px;}
+.nav-ic{font-size:.82rem;width:17px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--s3);color:var(--t3);font-size:.58rem;padding:2px 6px;border-radius:8px;font-weight:700;}
+.nav.on .nav-badge{background:var(--acc-g);color:var(--acc);}
 
-/* ── CONTENT ── */
-.content{flex:1;padding:24px 28px;overflow-y:auto;min-height:calc(100vh - 57px);}
-
-/* ── LOADING ── */
-.skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--r-sm);}
-@keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
-.loading-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
-.loading-card{height:100px;border-radius:var(--r);}
+.content{flex:1;padding:22px 26px;overflow-y:auto;min-height:calc(100vh - 56px);}
 
 /* ── STATS ── */
-.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;position:relative;overflow:hidden;cursor:pointer;transition:all 0.2s;}
-.stat-card:hover{border-color:var(--border2);transform:translateY(-2px);}
-.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;}
-.stat-card.s1::after{background:linear-gradient(90deg,var(--accent),transparent);}
-.stat-card.s2::after{background:linear-gradient(90deg,var(--green),transparent);}
-.stat-card.s3::after{background:linear-gradient(90deg,var(--yellow),transparent);}
-.stat-card.s4::after{background:linear-gradient(90deg,var(--red),transparent);}
-.stat-icon{font-size:1.4rem;margin-bottom:10px;}
-.stat-label{font-size:0.63rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);margin-bottom:6px;}
-.stat-value{font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:500;line-height:1;}
-.stat-sub{font-size:0.68rem;color:var(--text3);margin-top:5px;}
-.stat-trend{position:absolute;top:16px;right:16px;font-size:0.68rem;padding:3px 8px;border-radius:10px;}
-.trend-up{background:rgba(0,229,160,0.1);color:var(--green);}
-.trend-down{background:rgba(255,71,87,0.1);color:var(--red);}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:22px;}
+.sc{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+.sc:hover{border-color:var(--br2);transform:translateY(-2px);}
+.sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;}
+.sc.c1::after{background:linear-gradient(90deg,var(--acc),transparent);}
+.sc.c2::after{background:linear-gradient(90deg,var(--grn),transparent);}
+.sc.c3::after{background:linear-gradient(90deg,var(--ylw),transparent);}
+.sc.c4::after{background:linear-gradient(90deg,var(--red),transparent);}
+.sc-ic{font-size:1.3rem;margin-bottom:9px;}
+.sc-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:5px;}
+.sc-val{font-family:'JetBrains Mono',monospace;font-size:1.75rem;font-weight:500;line-height:1;}
+.sc-sub{font-size:.67rem;color:var(--t3);margin-top:4px;}
+.sc-tag{position:absolute;top:14px;right:14px;font-size:.62rem;padding:2px 7px;border-radius:8px;}
+.tag-up{background:rgba(0,229,160,.1);color:var(--grn);}
+.tag-dn{background:rgba(255,71,87,.1);color:var(--red);}
 
-/* ── CHART AREA ── */
-.chart-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px;}
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;}
-.chart-title{font-size:0.78rem;font-weight:600;color:var(--text2);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
-.chart-title span{font-family:'Playfair Display',serif;font-size:1rem;color:var(--text);}
-canvas{display:block;}
+/* ── CHARTS ── */
+.chart-row{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:22px;}
+.card{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:18px;}
+.card-title{font-size:.75rem;font-weight:600;color:var(--t2);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.card-title span:first-child{font-family:'Playfair Display',serif;font-size:.98rem;color:var(--t1);}
 
-/* ── BAR CHART (pure CSS/SVG) ── */
-.bar-chart{display:flex;align-items:flex-end;gap:8px;height:120px;padding-bottom:4px;}
-.bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
-.bar{width:100%;border-radius:4px 4px 0 0;transition:height 0.6s cubic-bezier(0.34,1.56,0.64,1);cursor:pointer;position:relative;}
-.bar:hover::after{content:attr(data-val);position:absolute;top:-24px;left:50%;transform:translateX(-50%);font-size:0.65rem;font-family:'JetBrains Mono',monospace;color:var(--text);background:var(--surface3);padding:2px 6px;border-radius:4px;white-space:nowrap;}
-.bar-label{font-size:0.6rem;color:var(--text3);}
+/* bar chart */
+.bars{display:flex;align-items:flex-end;gap:7px;height:110px;}
+.bw{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bar{width:100%;border-radius:4px 4px 0 0;transition:height .6s cubic-bezier(.34,1.56,.64,1);cursor:pointer;position:relative;min-height:3px;}
+.bar:hover::after{content:attr(data-v);position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--t1);background:var(--s3);padding:2px 5px;border-radius:4px;white-space:nowrap;}
+.bar-lbl{font-size:.57rem;color:var(--t3);text-align:center;}
 
-/* ── DONUT ── */
-.donut-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;}
+/* donut */
+.donut-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;}
 .donut-svg{transform:rotate(-90deg);}
-.donut-legend{display:flex;flex-direction:column;gap:7px;width:100%;}
-.legend-item{display:flex;align-items:center;gap:8px;font-size:0.75rem;}
-.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.legend-label{color:var(--text2);flex:1;}
-.legend-val{font-family:'JetBrains Mono',monospace;color:var(--text);font-size:0.72rem;}
+.leg{display:flex;flex-direction:column;gap:6px;width:100%;}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:.72rem;}
+.leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.leg-lbl{color:var(--t2);flex:1;}
+.leg-val{font-family:'JetBrains Mono',monospace;font-size:.7rem;}
 
-/* ── ACTIVITY FEED ── */
-.activity-feed{display:flex;flex-direction:column;gap:0;}
-.activity-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);position:relative;}
-.activity-item:last-child{border-bottom:none;}
-.activity-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;flex-shrink:0;}
-.act-pay{background:rgba(0,229,160,0.1);color:var(--green);}
-.act-new{background:rgba(79,142,255,0.1);color:var(--accent);}
-.act-due{background:rgba(255,71,87,0.1);color:var(--red);}
-.activity-content{flex:1;}
-.activity-text{font-size:0.79rem;font-weight:500;line-height:1.4;}
-.activity-time{font-size:0.67rem;color:var(--text3);margin-top:2px;}
-.activity-amount{font-family:'JetBrains Mono',monospace;font-size:0.82rem;color:var(--green);}
+/* activity */
+.act-list{display:flex;flex-direction:column;}
+.act-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--br);}
+.act-item:last-child{border-bottom:none;}
+.act-ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;}
+.a-pay{background:rgba(0,229,160,.1);color:var(--grn);}
+.a-new{background:rgba(79,142,255,.1);color:var(--acc);}
+.a-due{background:rgba(255,71,87,.1);color:var(--red);}
+.act-body{flex:1;}
+.act-txt{font-size:.77rem;font-weight:500;line-height:1.4;}
+.act-time{font-size:.65rem;color:var(--t3);margin-top:1px;}
+.act-amt{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--grn);}
 
-/* ── SECTION ── */
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
-.section-title{font-family:'Playfair Display',serif;font-size:1.25rem;letter-spacing:-0.01em;}
-.section-actions{display:flex;gap:8px;align-items:center;}
-.search-wrap{position:relative;}
-.search-wrap input{padding-left:32px;width:200px;}
-.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:0.8rem;pointer-events:none;}
+/* upcoming */
+.up-item{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--br);}
+.up-item:last-child{border-bottom:none;}
+.up-ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;}
 
-/* ── TENANT GRID ── */
-.tenant-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;}
-.tenant-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;}
-.tenant-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;border-radius:0;}
-.tenant-card.s-paid::before{background:var(--green);}
-.tenant-card.s-due::before{background:var(--red);}
-.tenant-card.s-partial::before{background:var(--yellow);}
-.tenant-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,0.4);}
-.tc-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;}
-.tc-avatar{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.88rem;flex-shrink:0;}
-.tc-name{font-weight:700;font-size:0.88rem;line-height:1.3;}
-.tc-apt{font-size:0.68rem;color:var(--text3);}
-.badge{padding:3px 9px;border-radius:12px;font-size:0.6rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;}
-.b-paid{background:rgba(0,229,160,0.1);color:var(--green);border:1px solid rgba(0,229,160,0.2);}
-.b-due{background:rgba(255,71,87,0.1);color:var(--red);border:1px solid rgba(255,71,87,0.2);}
-.b-partial{background:rgba(255,211,42,0.1);color:var(--yellow);border:1px solid rgba(255,211,42,0.2);}
-.tc-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px;}
-.meta-lbl{font-size:0.58rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:2px;}
-.meta-val{font-family:'JetBrains Mono',monospace;font-size:0.79rem;}
-.progress-bar{height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;}
-.progress-fill{height:100%;border-radius:2px;transition:width 0.6s ease;}
-.tc-actions{display:flex;gap:6px;margin-top:12px;}
+/* ── TENANT CARDS ── */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px;}
+.tc{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:16px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+.tc::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;}
+.tc.sp::before{background:var(--grn);}
+.tc.sd::before{background:var(--red);}
+.tc.sx::before{background:var(--ylw);}
+.tc:hover{border-color:var(--br2);transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.4);}
+.tc-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;}
+.tav{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
+.tn{font-weight:700;font-size:.86rem;line-height:1.3;}
+.ta{font-size:.67rem;color:var(--t3);}
+.badge{padding:2px 8px;border-radius:10px;font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+.bp{background:rgba(0,229,160,.1);color:var(--grn);border:1px solid rgba(0,229,160,.2);}
+.bd{background:rgba(255,71,87,.1);color:var(--red);border:1px solid rgba(255,71,87,.2);}
+.bx{background:rgba(255,211,42,.1);color:var(--ylw);border:1px solid rgba(255,211,42,.2);}
+.tm{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.ml{font-size:.57rem;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:1px;}
+.mv{font-family:'JetBrains Mono',monospace;font-size:.77rem;}
+.pbar{height:3px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.pfill{height:100%;border-radius:2px;transition:width .5s ease;}
+.tc-acts{display:flex;gap:5px;margin-top:10px;}
 
 /* ── TABLE ── */
-.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.tbl-wrap{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);overflow:hidden;}
 table{width:100%;border-collapse:collapse;}
-thead th{padding:11px 16px;text-align:left;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);background:var(--surface2);border-bottom:1px solid var(--border);font-weight:700;}
-tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
+thead th{padding:10px 14px;text-align:left;font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);background:var(--s2);border-bottom:1px solid var(--br);font-weight:700;}
+tbody tr{border-bottom:1px solid var(--br);transition:background .1s;}
 tbody tr:last-child{border-bottom:none;}
-tbody tr:hover{background:var(--surface2);}
-tbody td{padding:12px 16px;font-size:0.8rem;}
+tbody tr:hover{background:var(--s2);}
+tbody td{padding:11px 14px;font-size:.79rem;}
 .mono{font-family:'JetBrains Mono',monospace;}
 
-/* ── MODAL ── */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.22s;}
-.overlay.open{opacity:1;pointer-events:all;}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;transform:scale(0.95) translateY(12px);transition:transform 0.22s;box-shadow:0 40px 80px rgba(0,0,0,0.6);}
-.overlay.open .modal{transform:scale(1) translateY(0);}
-.modal-lg{width:600px;}
-.modal-sm{width:380px;}
-.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
-.modal-title{font-family:'Playfair Display',serif;font-size:1.25rem;}
-.close-btn{width:30px;height:30px;border-radius:7px;background:var(--surface2);border:none;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center;transition:all 0.15s;font-size:0.85rem;}
-.close-btn:hover{background:var(--surface3);color:var(--text);}
-.modal-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+/* ── SECTION ── */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sec-title{font-family:'Playfair Display',serif;font-size:1.2rem;}
+.sec-acts{display:flex;gap:7px;align-items:center;}
+.srch{font-family:'Space Grotesk',sans-serif;background:var(--s1);border:1px solid var(--br);color:var(--t1);padding:8px 12px;border-radius:var(--rs);font-size:.77rem;outline:none;width:185px;transition:border-color .15s;}
+.srch:focus{border-color:var(--acc);}
+.srch::placeholder{color:var(--t3);}
 
-/* ── FORM GRID ── */
-.fg{display:grid;grid-template-columns:1fr 1fr;gap:13px;}
-.fg .full{grid-column:1/-1;}
-.fg .form-group{margin-bottom:0;}
+/* ── MODAL ── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+.ov.on{opacity:1;pointer-events:all;}
+.modal{background:var(--s1);border:1px solid var(--br);border-radius:18px;padding:26px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;transform:scale(.95) translateY(10px);transition:transform .2s;box-shadow:0 40px 80px rgba(0,0,0,.6);}
+.ov.on .modal{transform:scale(1) translateY(0);}
+.modal-lg{width:560px;}
+.modal-sm{width:360px;}
+.mhd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.mtitle{font-family:'Playfair Display',serif;font-size:1.18rem;}
+.xbtn{width:28px;height:28px;border-radius:6px;background:var(--s2);border:none;cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;font-size:.82rem;transition:all .14s;}
+.xbtn:hover{background:var(--s3);color:var(--t1);}
+.macts{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--br);}
 
 /* ── DETAIL ── */
-.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
-.detail-item{background:var(--surface2);border-radius:var(--r-sm);padding:12px;}
-.plog-entry{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);}
-.plog-entry:last-child{border-bottom:none;}
-.plog-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;background:rgba(0,229,160,0.1);color:var(--green);flex-shrink:0;}
-.plog-info{flex:1;}
-.plog-desc{font-size:0.79rem;font-weight:600;}
-.plog-date{font-size:0.66rem;color:var(--text3);margin-top:1px;}
-.plog-amt{font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--green);}
+.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:16px;}
+.di{background:var(--s2);border-radius:var(--rs);padding:11px;}
+.plog{display:flex;flex-direction:column;}
+.pl-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--br);}
+.pl-item:last-child{border-bottom:none;}
+.pl-ic{width:28px;height:28px;border-radius:7px;background:rgba(0,229,160,.1);color:var(--grn);display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;}
+.pl-info{flex:1;}
+.pl-desc{font-size:.77rem;font-weight:600;}
+.pl-date{font-size:.64rem;color:var(--t3);margin-top:1px;}
+.pl-amt{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--grn);}
+
+/* ── USERS ── */
+.ulist{display:flex;flex-direction:column;gap:9px;}
+.urow{background:var(--s1);border:1px solid var(--br);border-radius:var(--rs);padding:13px 15px;display:flex;align-items:center;gap:11px;}
+.urow-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--pur));display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0;}
+.urow-info{flex:1;}
+.urow-name{font-size:.82rem;font-weight:600;}
+.urow-meta{font-size:.68rem;color:var(--t3);margin-top:1px;}
+.role-badge{padding:2px 8px;border-radius:8px;font-size:.58rem;font-weight:700;text-transform:uppercase;}
+.r-admin{background:rgba(168,85,247,.12);color:var(--pur);border:1px solid rgba(168,85,247,.2);}
+.r-viewer{background:rgba(79,142,255,.1);color:var(--acc);border:1px solid rgba(79,142,255,.2);}
 
 /* ── TOAST ── */
-.toast{position:fixed;bottom:22px;right:22px;z-index:9999;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 18px;font-size:0.8rem;max-width:300px;transform:translateY(80px);opacity:0;transition:all 0.3s;box-shadow:0 20px 40px rgba(0,0,0,0.4);}
-.toast.show{transform:translateY(0);opacity:1;}
-.toast.t-success{border-left:3px solid var(--green);}
-.toast.t-error{border-left:3px solid var(--red);}
-.toast.t-info{border-left:3px solid var(--accent);}
+.toast{position:fixed;bottom:20px;right:20px;z-index:9999;background:var(--s1);border:1px solid var(--br);border-radius:11px;padding:11px 16px;font-size:.79rem;display:flex;align-items:center;gap:8px;transform:translateY(70px);opacity:0;transition:all .28s;box-shadow:0 18px 36px rgba(0,0,0,.45);max-width:280px;}
+.toast.on{transform:translateY(0);opacity:1;}
+.toast.ts{border-left:3px solid var(--grn);}
+.toast.te{border-left:3px solid var(--red);}
+.toast.ti{border-left:3px solid var(--acc);}
 
 /* ── EMPTY ── */
-.empty-state{text-align:center;padding:60px 20px;color:var(--text3);}
-.empty-state .e-icon{font-size:3rem;margin-bottom:12px;opacity:0.5;}
-.empty-state .e-text{font-size:0.85rem;}
+.empty{text-align:center;padding:50px 20px;color:var(--t3);}
+.empty-ic{font-size:2.8rem;margin-bottom:10px;opacity:.5;}
 
-/* ── SCROLLBAR ── */
-::-webkit-scrollbar{width:5px;height:5px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+/* ── ANIMATIONS ── */
+.fade{animation:fd .35s ease;}
+@keyframes fd{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:translateY(0);}}
 
 /* ── RESPONSIVE ── */
-@media(max-width:900px){
-  .sidebar{display:none;}
-  .stats-bar{grid-template-columns:1fr 1fr;}
-  .chart-row{grid-template-columns:1fr;}
-  .topbar-center{display:none;}
-  .content{padding:16px;}
-}
-@media(max-width:600px){
-  .stats-bar{grid-template-columns:1fr;}
-  .tenant-grid{grid-template-columns:1fr;}
-}
-
-/* ── SETUP WIZARD ── */
-.wizard-step{display:none;}
-.wizard-step.active{display:block;}
-.step-indicator{display:flex;gap:6px;margin-bottom:24px;}
-.step-dot{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background 0.3s;}
-.step-dot.done{background:var(--accent);}
-
-/* ── ROLES ── */
-.role-badge{padding:2px 8px;border-radius:8px;font-size:0.6rem;font-weight:700;text-transform:uppercase;}
-.role-admin{background:rgba(168,85,247,0.12);color:var(--purple);border:1px solid rgba(168,85,247,0.2);}
-.role-viewer{background:rgba(79,142,255,0.1);color:var(--accent);border:1px solid rgba(79,142,255,0.2);}
-
-/* ── USERS TABLE ── */
-.users-list{display:flex;flex-direction:column;gap:10px;}
-.user-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;display:flex;align-items:center;gap:12px;}
-.user-row-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;color:#fff;flex-shrink:0;}
-.user-row-info{flex:1;}
-.user-row-email{font-size:0.82rem;font-weight:600;}
-.user-row-meta{font-size:0.7rem;color:var(--text3);margin-top:2px;}
-.user-row-actions{display:flex;gap:6px;}
-
-/* Animations */
-.fade-in{animation:fadeIn 0.4s ease;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@media(max-width:900px){.side{display:none;}.stats{grid-template-columns:1fr 1fr;}.chart-row{grid-template-columns:1fr;}.top-nav{display:none;}.content{padding:14px;}}
+@media(max-width:580px){.stats{grid-template-columns:1fr;}.tgrid{grid-template-columns:1fr;}}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--br);border-radius:3px;}
 </style>
 </head>
 <body>
 <div class="bg-grid"></div>
-<div class="bg-orb bg-orb1"></div>
-<div class="bg-orb bg-orb2"></div>
+<div class="bg-blob bb1"></div>
+<div class="bg-blob bb2"></div>
 
-<!-- ══════════════════════════════════════════
-     AUTH / SETUP SCREEN
-══════════════════════════════════════════ -->
-<div id="authScreen">
-  <div class="auth-card">
-    <div class="auth-logo">
-      <div class="auth-logo-mark">🏠</div>
-      <div>
-        <div class="auth-logo-text">RentTrack</div>
-        <div class="auth-logo-sub">Property Manager</div>
-      </div>
-    </div>
-
-    <!-- STEP 2: Login / Signup -->
-    <div id="stepAuth" class="wizard-step">
-      <div class="auth-tabs">
-        <div class="auth-tab active" id="tabSignin" onclick="switchAuthTab('signin')">Sign In</div>
-        <div class="auth-tab" id="tabSignup" onclick="switchAuthTab('signup')">Create Account</div>
+<!-- ══════════════ AUTH ══════════════ -->
+<div id="auth">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-mark">🏠</div>
+        <div><div class="auth-brand">RentTrack</div><div class="auth-sub">Property Manager</div></div>
       </div>
 
-      <div id="signinForm">
-        <div class="form-group">
-          <label>Email</label>
-          <input id="siEmail" type="email" placeholder="you@example.com">
+      <!-- Sign In -->
+      <div id="vSignin">
+        <div class="auth-tabs">
+          <div class="auth-tab on" onclick="authTab('signin')">Sign In</div>
+          <div class="auth-tab" onclick="authTab('signup')">Create Account</div>
         </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input id="siPass" type="password" placeholder="••••••••">
+        <div class="fg">
+          <div class="fgrp"><label>Email</label><input id="siEmail" type="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doSignin()"></div>
+          <div class="fgrp"><label>Password</label><input id="siPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignin()"></div>
+          <div class="err" id="siErr"></div>
+          <button class="btn btn-blue" onclick="doSignin()" id="siBtn">Sign In</button>
         </div>
-        <div class="err-msg" id="siErr"></div>
-        <button class="btn btn-primary" onclick="signIn()" id="siBtn">Sign In</button>
-        <div style="text-align:center;margin-top:12px">
-          <a href="#" onclick="showReset()" style="font-size:0.75rem;color:var(--text2);text-decoration:none;">Forgot password?</a>
+        <div style="text-align:center;margin-top:12px;font-size:.73rem;color:var(--t3)">
+          Don't have an account? <a href="#" onclick="authTab('signup')" style="color:var(--acc);text-decoration:none;">Create one</a>
         </div>
       </div>
 
-      <div id="signupForm" style="display:none">
-        <div class="form-group">
-          <label>Full Name</label>
-          <input id="suName" type="text" placeholder="John Smith">
+      <!-- Sign Up -->
+      <div id="vSignup" style="display:none">
+        <div class="auth-tabs">
+          <div class="auth-tab" onclick="authTab('signin')">Sign In</div>
+          <div class="auth-tab on" onclick="authTab('signup')">Create Account</div>
         </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input id="suEmail" type="email" placeholder="you@example.com">
+        <div class="fg">
+          <div class="fgrp"><label>Full Name</label><input id="suName" type="text" placeholder="Your name"></div>
+          <div class="fgrp"><label>Email</label><input id="suEmail" type="email" placeholder="you@example.com"></div>
+          <div class="fgrp"><label>Password</label><input id="suPass" type="password" placeholder="Min 6 characters"></div>
+          <div class="fgrp"><label>Role</label>
+            <select id="suRole">
+              <option value="admin">Admin — full access</option>
+              <option value="viewer">Viewer — read only</option>
+            </select>
+          </div>
+          <div class="err" id="suErr"></div>
+          <button class="btn btn-blue" onclick="doSignup()" id="suBtn">Create Account</button>
         </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input id="suPass" type="password" placeholder="Min 6 characters">
+        <div style="text-align:center;margin-top:12px;font-size:.73rem;color:var(--t3)">
+          Already have an account? <a href="#" onclick="authTab('signin')" style="color:var(--acc);text-decoration:none;">Sign in</a>
         </div>
-        <div class="form-group">
-          <label>Role</label>
-          <select id="suRole">
-            <option value="admin">Admin (full access)</option>
-            <option value="viewer">Viewer (read only)</option>
-          </select>
-        </div>
-        <div class="err-msg" id="suErr"></div>
-        <button class="btn btn-primary" onclick="signUp()" id="suBtn">Create Account</button>
-      </div>
-
-
-    </div>
-
-    <!-- STEP 3: Email confirm notice -->
-    <div id="stepConfirm" class="wizard-step">
-      <div style="text-align:center;padding:10px 0">
-        <div style="font-size:3rem;margin-bottom:16px">📧</div>
-        <div class="auth-title" style="margin-bottom:8px">Check your email</div>
-        <div class="auth-sub">We sent a confirmation link to <strong id="confirmEmail"></strong>. Click it to activate your account, then sign in.</div>
-        <button class="btn btn-ghost btn-full" style="margin-top:20px" onclick="showStep('stepAuth');switchAuthTab('signin')">← Back to Sign In</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     SQL SETUP MODAL
-══════════════════════════════════════════ -->
-<div class="overlay" id="sqlModal">
-  <div class="modal modal-lg">
-    <div class="modal-head">
-      <div class="modal-title">Database Setup SQL</div>
-      <button class="close-btn" onclick="closeModal('sqlModal')">✕</button>
-    </div>
-    <div style="font-size:0.78rem;color:var(--text2);margin-bottom:14px;line-height:1.6;">Copy and run this SQL in your Supabase project's <strong>SQL Editor</strong> (supabase.com → your project → SQL Editor → New query):</div>
-    <pre style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:16px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--accent3);overflow-x:auto;line-height:1.7;white-space:pre-wrap;">-- Enable UUID extension
-create extension if not exists "uuid-ossp";
-
--- Profiles table (extends Supabase auth)
-create table public.profiles (
-  id uuid references auth.users on delete cascade primary key,
-  email text,
-  full_name text,
-  role text default 'viewer' check (role in ('admin','viewer')),
-  created_at timestamptz default now()
-);
-alter table public.profiles enable row level security;
-create policy "Users can view all profiles" on public.profiles for select using (auth.role() = 'authenticated');
-create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
-create policy "Service can insert profiles" on public.profiles for insert with check (true);
-
--- Auto-create profile on signup
-create or replace function public.handle_new_user()
-returns trigger as $$
-begin
-  insert into public.profiles (id, email, full_name, role)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email,'@',1)),
-    coalesce(new.raw_user_meta_data->>'role', 'viewer')
-  );
-  return new;
-end;
-$$ language plpgsql security definer;
-create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
-
--- Tenants table
-create table public.tenants (
-  id uuid default uuid_generate_v4() primary key,
-  name text not null,
-  apt text not null,
-  rent numeric not null default 0,
-  phone text,
-  status text default 'paid' check (status in ('paid','partial','due')),
-  amt_paid numeric default 0,
-  months_paid integer default 0,
-  next_date date,
-  comment text,
-  created_by uuid references auth.users,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-alter table public.tenants enable row level security;
-create policy "Authenticated users can view tenants" on public.tenants for select using (auth.role() = 'authenticated');
-create policy "Admins can insert tenants" on public.tenants for insert with check (auth.role() = 'authenticated');
-create policy "Admins can update tenants" on public.tenants for update using (auth.role() = 'authenticated');
-create policy "Admins can delete tenants" on public.tenants for delete using (auth.role() = 'authenticated');
-
--- Payments table
-create table public.payments (
-  id uuid default uuid_generate_v4() primary key,
-  tenant_id uuid references public.tenants on delete cascade,
-  amount numeric not null,
-  date date,
-  months integer default 1,
-  next_date date,
-  notes text,
-  logged_by uuid references auth.users,
-  created_at timestamptz default now()
-);
-alter table public.payments enable row level security;
-create policy "Authenticated users can view payments" on public.payments for select using (auth.role() = 'authenticated');
-create policy "Authenticated users can insert payments" on public.payments for insert with check (auth.role() = 'authenticated');
-create policy "Authenticated users can delete payments" on public.payments for delete using (auth.role() = 'authenticated');</pre>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('sqlModal')">Close</button>
-      <button class="btn btn-accent" onclick="copySQL()">📋 Copy SQL</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════
-     MAIN APP
-══════════════════════════════════════════ -->
-<div id="appScreen">
-  <!-- TOPBAR -->
+<!-- ══════════════ APP ══════════════ -->
+<div id="app">
   <div class="topbar">
-    <div class="logo" onclick="showView('dashboard')">
+    <div class="logo" onclick="gv('dashboard')">
       <div class="logo-mark">🏠</div>
-      <div class="logo-text">RentTrack</div>
+      <div class="logo-txt">RentTrack</div>
     </div>
-    <div class="topbar-center">
-      <div class="top-tab active" id="ttab-dashboard" onclick="showView('dashboard')">Dashboard</div>
-      <div class="top-tab" id="ttab-tenants" onclick="showView('tenants')">Tenants</div>
-      <div class="top-tab" id="ttab-payments" onclick="showView('payments')">Payments</div>
+    <div class="top-nav">
+      <div class="tnav on" id="tt-dashboard" onclick="gv('dashboard')">Dashboard</div>
+      <div class="tnav" id="tt-tenants" onclick="gv('tenants')">Tenants</div>
+      <div class="tnav" id="tt-payments" onclick="gv('payments')">Payments</div>
     </div>
-    <div class="topbar-right">
-      <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--text3);">
-        <div class="sync-dot" id="syncDot"></div>
-        <span id="syncLabel">Live</span>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="openTenantModal()">+ Tenant</button>
-      <button class="btn btn-accent btn-sm" onclick="openPaymentModal()">+ Payment</button>
-      <div class="user-pill" onclick="showView('settings')">
-        <div class="user-avatar" id="userAvatar">?</div>
-        <div class="user-name" id="userName">Loading…</div>
+    <div class="top-right">
+      <button class="btn btn-ghost btn-sm" onclick="openTM()">+ Tenant</button>
+      <button class="btn btn-acc btn-sm" onclick="openPM()">+ Payment</button>
+      <div class="user-chip" onclick="gv('settings')">
+        <div class="uav" id="uav">?</div>
+        <div class="uname" id="uname">…</div>
       </div>
     </div>
   </div>
 
-  <div class="app-body">
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-      <div class="sidebar-section">Main</div>
-      <div class="nav-item active" id="nav-dashboard" onclick="showView('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
-      <div class="nav-item" id="nav-tenants" onclick="showView('tenants')"><span class="nav-icon">🏘</span>Tenants<span class="nav-badge" id="nb-tenants">0</span></div>
-      <div class="nav-item" id="nav-payments" onclick="showView('payments')"><span class="nav-icon">💳</span>Payments<span class="nav-badge" id="nb-payments">0</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="side-lbl">Main</div>
+      <div class="nav on" id="n-dashboard" onclick="gv('dashboard')"><span class="nav-ic">📊</span>Dashboard</div>
+      <div class="nav" id="n-tenants" onclick="gv('tenants')"><span class="nav-ic">🏘</span>Tenants<span class="nav-badge" id="nb-t">0</span></div>
+      <div class="nav" id="n-payments" onclick="gv('payments')"><span class="nav-ic">💳</span>Payments<span class="nav-badge" id="nb-p">0</span></div>
 
-      <div class="sidebar-section" style="margin-top:8px">Filters</div>
-      <div class="nav-item" id="nav-f-all" onclick="filterView('all')"><span class="nav-icon">👥</span>All Tenants</div>
-      <div class="nav-item" id="nav-f-paid" onclick="filterView('paid')"><span class="nav-icon" style="color:var(--green)">✓</span>Paid</div>
-      <div class="nav-item" id="nav-f-due" onclick="filterView('due')"><span class="nav-icon" style="color:var(--red)">!</span>Overdue</div>
-      <div class="nav-item" id="nav-f-partial" onclick="filterView('partial')"><span class="nav-icon" style="color:var(--yellow)">~</span>Partial</div>
+      <div class="side-lbl" style="margin-top:7px">Filter</div>
+      <div class="nav" id="n-f-all" onclick="fv('all')"><span class="nav-ic">👥</span>All</div>
+      <div class="nav" id="n-f-paid" onclick="fv('paid')"><span class="nav-ic" style="color:var(--grn)">✓</span>Paid</div>
+      <div class="nav" id="n-f-due" onclick="fv('due')"><span class="nav-ic" style="color:var(--red)">!</span>Overdue</div>
+      <div class="nav" id="n-f-partial" onclick="fv('partial')"><span class="nav-ic" style="color:var(--ylw)">~</span>Partial</div>
 
-      <div class="sidebar-section" style="margin-top:8px">Admin</div>
-      <div class="nav-item" id="nav-settings" onclick="showView('settings')"><span class="nav-icon">⚙</span>Settings</div>
-      <div class="nav-item" id="nav-users" onclick="showView('users')"><span class="nav-icon">👤</span>Users</div>
-      <div class="nav-item" onclick="signOut()" style="margin-top:auto;color:var(--red)"><span class="nav-icon">↩</span>Sign Out</div>
+      <div class="side-lbl" style="margin-top:7px">Admin</div>
+      <div class="nav" id="n-users" onclick="gv('users')"><span class="nav-ic">👤</span>Users</div>
+      <div class="nav" id="n-settings" onclick="gv('settings')"><span class="nav-ic">⚙</span>Settings</div>
+      <div class="nav" onclick="doSignout()" style="color:var(--red);margin-top:4px"><span class="nav-ic">↩</span>Sign Out</div>
     </div>
 
-    <!-- CONTENT -->
-    <div class="content" id="content">
-      <div class="loading-grid">
-        <div class="skeleton loading-card"></div>
-        <div class="skeleton loading-card"></div>
-        <div class="skeleton loading-card"></div>
-        <div class="skeleton loading-card"></div>
-      </div>
-    </div>
+    <div class="content fade" id="content"></div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     MODALS
-══════════════════════════════════════════ -->
-<!-- TENANT MODAL -->
-<div class="overlay" id="tenantModal">
+<!-- ══════════ MODALS ══════════ -->
+<!-- Tenant -->
+<div class="ov" id="tmModal">
   <div class="modal">
-    <div class="modal-head">
-      <div class="modal-title" id="tenantModalTitle">Add Tenant</div>
-      <button class="close-btn" onclick="closeModal('tenantModal')">✕</button>
-    </div>
-    <input type="hidden" id="tId">
-    <div class="fg">
-      <div class="form-group full"><label>Full Name *</label><input id="tName" placeholder="e.g. John Smith"></div>
-      <div class="form-group"><label>Apartment / Unit *</label><input id="tApt" placeholder="e.g. 4 Room Apt"></div>
-      <div class="form-group"><label>Monthly Rent ($) *</label><input id="tRent" type="number" min="0" placeholder="60"></div>
-      <div class="form-group"><label>Phone</label><input id="tPhone" placeholder="+231..."></div>
-      <div class="form-group"><label>Status</label>
-        <select id="tStatus"><option value="paid">Paid</option><option value="partial">Partial</option><option value="due">Due</option></select>
+    <div class="mhd"><div class="mtitle" id="tmTitle">Add Tenant</div><button class="xbtn" onclick="cm('tmModal')">✕</button></div>
+    <input type="hidden" id="tmId">
+    <div class="fg2">
+      <div class="fgrp full"><label>Full Name *</label><input id="tmName" placeholder="e.g. John Smith"></div>
+      <div class="fgrp"><label>Apartment / Unit *</label><input id="tmApt" placeholder="e.g. 4 Room Apt"></div>
+      <div class="fgrp"><label>Monthly Rent ($) *</label><input id="tmRent" type="number" min="0" placeholder="60"></div>
+      <div class="fgrp"><label>Phone</label><input id="tmPhone" placeholder="+231..."></div>
+      <div class="fgrp"><label>Status</label>
+        <select id="tmStatus"><option value="paid">Paid</option><option value="partial">Partial</option><option value="due">Due</option></select>
       </div>
-      <div class="form-group"><label>Next Payment Date</label><input id="tNextDate" type="date"></div>
-      <div class="form-group"><label>Total Paid ($)</label><input id="tAmtPaid" type="number" min="0" placeholder="0"></div>
-      <div class="form-group"><label>Months Paid</label><input id="tMonthsPaid" type="number" min="0" placeholder="0"></div>
-      <div class="form-group full"><label>Notes</label><textarea id="tComment" placeholder="Any notes..."></textarea></div>
+      <div class="fgrp"><label>Next Due Date</label><input id="tmNext" type="date"></div>
+      <div class="fgrp"><label>Total Paid ($)</label><input id="tmPaid" type="number" min="0" placeholder="0"></div>
+      <div class="fgrp"><label>Months Paid</label><input id="tmMonths" type="number" min="0" placeholder="0"></div>
+      <div class="fgrp full"><label>Notes</label><textarea id="tmNote" placeholder="Any notes…"></textarea></div>
     </div>
-    <div class="err-msg" id="tErr"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('tenantModal')">Cancel</button>
-      <button class="btn btn-accent" onclick="saveTenant()" id="tSaveBtn">Save Tenant</button>
+    <div class="err on" id="tmErr" style="display:none"></div>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="cm('tmModal')">Cancel</button>
+      <button class="btn btn-acc" onclick="saveTenant()" id="tmSave">Save Tenant</button>
     </div>
   </div>
 </div>
 
-<!-- PAYMENT MODAL -->
-<div class="overlay" id="paymentModal">
+<!-- Payment -->
+<div class="ov" id="pmModal">
   <div class="modal">
-    <div class="modal-head">
-      <div class="modal-title">Log Payment</div>
-      <button class="close-btn" onclick="closeModal('paymentModal')">✕</button>
+    <div class="mhd"><div class="mtitle">Log Payment</div><button class="xbtn" onclick="cm('pmModal')">✕</button></div>
+    <div class="fg2">
+      <div class="fgrp full"><label>Tenant *</label><select id="pmTenant" onchange="afr()"></select></div>
+      <div class="fgrp"><label>Amount ($) *</label><input id="pmAmt" type="number" min="0" placeholder="60"></div>
+      <div class="fgrp"><label>Date</label><input id="pmDate" type="date"></div>
+      <div class="fgrp"><label>Months Covered</label><input id="pmMonths" type="number" min="1" placeholder="1"></div>
+      <div class="fgrp"><label>Next Due Date</label><input id="pmNext" type="date"></div>
+      <div class="fgrp full"><label>Notes</label><input id="pmNote" placeholder="e.g. Cash — January rent"></div>
     </div>
-    <div class="fg">
-      <div class="form-group full"><label>Tenant *</label><select id="pTenant" onchange="autoFillRent()"></select></div>
-      <div class="form-group"><label>Amount ($) *</label><input id="pAmount" type="number" min="0" placeholder="60"></div>
-      <div class="form-group"><label>Date</label><input id="pDate" type="date"></div>
-      <div class="form-group"><label>Months Covered</label><input id="pMonths" type="number" min="1" placeholder="1"></div>
-      <div class="form-group"><label>Next Due Date</label><input id="pNextDate" type="date"></div>
-      <div class="form-group full"><label>Notes</label><input id="pNotes" placeholder="e.g. Cash — January rent"></div>
-    </div>
-    <div class="err-msg" id="pErr"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('paymentModal')">Cancel</button>
-      <button class="btn btn-accent" onclick="savePayment()" id="pSaveBtn">Log Payment</button>
+    <div class="err" id="pmErr"></div>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="cm('pmModal')">Cancel</button>
+      <button class="btn btn-acc" onclick="savePayment()" id="pmSave">Log Payment</button>
     </div>
   </div>
 </div>
 
-<!-- DETAIL MODAL -->
-<div class="overlay" id="detailModal">
+<!-- Detail -->
+<div class="ov" id="dtModal">
   <div class="modal modal-lg">
-    <div class="modal-head">
-      <div class="modal-title" id="detailTitle"></div>
-      <button class="close-btn" onclick="closeModal('detailModal')">✕</button>
-    </div>
-    <div id="detailBody"></div>
+    <div class="mhd"><div class="mtitle" id="dtTitle"></div><button class="xbtn" onclick="cm('dtModal')">✕</button></div>
+    <div id="dtBody"></div>
   </div>
 </div>
 
-<!-- CONFIRM MODAL -->
-<div class="overlay" id="confirmModal">
+<!-- Confirm -->
+<div class="ov" id="cfModal">
   <div class="modal modal-sm">
-    <div class="modal-head">
-      <div class="modal-title" id="confirmTitle">Confirm</div>
-      <button class="close-btn" onclick="closeModal('confirmModal')">✕</button>
-    </div>
-    <p id="confirmMsg" style="color:var(--text2);font-size:0.83rem;line-height:1.6;margin-bottom:4px;"></p>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('confirmModal')">Cancel</button>
-      <button class="btn btn-danger" id="confirmOkBtn">Delete</button>
+    <div class="mhd"><div class="mtitle" id="cfTitle">Confirm</div><button class="xbtn" onclick="cm('cfModal')">✕</button></div>
+    <p id="cfMsg" style="color:var(--t2);font-size:.82rem;line-height:1.6;margin-bottom:4px"></p>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="cm('cfModal')">Cancel</button>
+      <button class="btn btn-red" id="cfOk">Delete</button>
     </div>
   </div>
 </div>
 
-<!-- INVITE USER MODAL -->
-<div class="overlay" id="inviteModal">
+<!-- Edit User -->
+<div class="ov" id="euModal">
   <div class="modal modal-sm">
-    <div class="modal-head">
-      <div class="modal-title">Invite User</div>
-      <button class="close-btn" onclick="closeModal('inviteModal')">✕</button>
+    <div class="mhd"><div class="mtitle">Edit User</div><button class="xbtn" onclick="cm('euModal')">✕</button></div>
+    <input type="hidden" id="euId">
+    <div class="fg">
+      <div class="fgrp"><label>Full Name</label><input id="euName" type="text"></div>
+      <div class="fgrp"><label>Role</label>
+        <select id="euRole"><option value="admin">Admin</option><option value="viewer">Viewer</option></select>
+      </div>
+      <div class="fgrp"><label>New Password (leave blank to keep current)</label><input id="euPass" type="password" placeholder="••••••••"></div>
     </div>
-    <div style="font-size:0.78rem;color:var(--text2);margin-bottom:16px;line-height:1.6;">
-      Share the app URL and ask them to create an account. You can then manage their role below.
-    </div>
-    <div class="form-group">
-      <label>App URL</label>
-      <input id="appUrlInput" type="text" readonly style="font-size:0.72rem;color:var(--accent3);">
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('inviteModal')">Close</button>
-      <button class="btn btn-accent" onclick="copyAppUrl()">📋 Copy URL</button>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="cm('euModal')">Cancel</button>
+      <button class="btn btn-acc" onclick="saveUser()">Save</button>
     </div>
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ══════════════════════════════════════════
-// CONFIG & SUPABASE INIT
-// ══════════════════════════════════════════
-let supabase = null;
-let currentUser = null;
-let currentProfile = null;
-let tenants = [];
+// ═══════════════════════════════════════════
+// STORAGE KEYS
+// ═══════════════════════════════════════════
+const K = {
+  users:    'rt_users',
+  tenants:  'rt_tenants',
+  payments: 'rt_payments',
+  session:  'rt_session',
+};
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let users    = [];
+let tenants  = [];
 let payments = [];
-let currentView = 'dashboard';
-let currentFilter = 'all';
+let session  = null; // { userId }
+let view     = 'dashboard';
+let filter   = 'all';
 
-const CFG_KEY = 'renttrack_supabase_cfg';
-
-function loadConfig() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); } catch(e) { return null; }
+// ═══════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════
+function load() {
+  users    = JSON.parse(localStorage.getItem(K.users)    || '[]');
+  tenants  = JSON.parse(localStorage.getItem(K.tenants)  || '[]');
+  payments = JSON.parse(localStorage.getItem(K.payments) || '[]');
+  session  = JSON.parse(localStorage.getItem(K.session)  || 'null');
 }
-function saveConfig_ls(url, key) {
-  localStorage.setItem(CFG_KEY, JSON.stringify({ url, key }));
+function save() {
+  localStorage.setItem(K.users,    JSON.stringify(users));
+  localStorage.setItem(K.tenants,  JSON.stringify(tenants));
+  localStorage.setItem(K.payments, JSON.stringify(payments));
+  localStorage.setItem(K.session,  JSON.stringify(session));
 }
+function uid() { return '_' + Math.random().toString(36).slice(2,11) + Date.now().toString(36); }
 
-async function saveConfig() {
-  const url = document.getElementById('cfgUrl').value.trim();
-  const key = document.getElementById('cfgKey').value.trim();
-  const err = document.getElementById('cfgErr');
-  if (!url || !key) { showErr('cfgErr', 'Both fields are required.'); return; }
-  if (!url.includes('supabase.co')) { showErr('cfgErr', 'URL should contain supabase.co'); return; }
-  const btn = document.getElementById('cfgBtn');
-  btn.classList.add('btn-loading'); btn.textContent = 'Connecting…';
-  try {
-    const { createClient } = supabaseJs;
-    supabase = createClient(url, key);
-    const { error } = await supabase.from('tenants').select('id').limit(1);
-    // Only block if it's an auth/network error, not a "no rows" or RLS error
-    if (error && (error.message.includes('Invalid API key') || error.message.includes('invalid_jwt') || error.message.includes('Failed to fetch'))) {
-      throw new Error('Invalid credentials. Check your URL and anon key.');
-    }
-    saveConfig_ls(url, key);
-    err.style.display = 'none';
-    showStep('stepAuth');
-  } catch(e) {
-    showErr('cfgErr', e.message || 'Connection failed. Check your URL and key.');
-  }
-  btn.classList.remove('btn-loading'); btn.textContent = 'Connect →';
-}
-
-async function initSupabase() {
-  const SUPA_URL = 'https://fpidvczvdquvqjwyiypz.supabase.co';
-  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwaWR2Y3p2ZHF1dnFqd3lpeXB6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MjQyODAsImV4cCI6MjA5MzUwMDI4MH0.V0MUA3PHM22NWS0JwXUYmRH8YTpbqmeEOuFmv57xznQ';
-  try {
-    const { createClient } = supabaseJs;
-    supabase = createClient(SUPA_URL, SUPA_KEY);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      currentUser = session.user;
-      await loadProfile();
-      launchApp();
-    } else {
-      showStep('stepAuth');
-    }
-  } catch(e) {
-    console.error('Supabase init error:', e);
-    showStep('stepAuth');
-  }
-}
-
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════
 // AUTH
-// ══════════════════════════════════════════
-function showStep(id) {
-  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-function goToConfig() { showStep('stepConfig'); }
-function switchAuthTab(tab) {
-  document.getElementById('tabSignin').classList.toggle('active', tab==='signin');
-  document.getElementById('tabSignup').classList.toggle('active', tab==='signup');
-  document.getElementById('signinForm').style.display = tab==='signin' ? 'block' : 'none';
-  document.getElementById('signupForm').style.display = tab==='signup' ? 'block' : 'none';
+// ═══════════════════════════════════════════
+function authTab(t) {
+  document.getElementById('vSignin').style.display = t==='signin' ? 'block' : 'none';
+  document.getElementById('vSignup').style.display = t==='signup' ? 'block' : 'none';
 }
 
-async function signIn() {
-  const email = document.getElementById('siEmail').value.trim();
-  const pass = document.getElementById('siPass').value;
+function doSignin() {
+  const email = g('siEmail').value.trim().toLowerCase();
+  const pass  = g('siPass').value;
+  const err   = g('siErr');
   if (!email || !pass) { showErr('siErr','Email and password required.'); return; }
-  const btn = document.getElementById('siBtn');
-  btn.classList.add('btn-loading'); btn.textContent = 'Signing in…';
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-  btn.classList.remove('btn-loading'); btn.textContent = 'Sign In';
-  if (error) { showErr('siErr', error.message); return; }
-  currentUser = data.user;
-  await loadProfile();
-  launchApp();
+  const u = users.find(u => u.email === email && u.password === btoa(pass));
+  if (!u) { showErr('siErr','Incorrect email or password.'); return; }
+  session = { userId: u.id };
+  save();
+  launchApp(u);
 }
 
-async function signUp() {
-  const name = document.getElementById('suName').value.trim();
-  const email = document.getElementById('suEmail').value.trim();
-  const pass = document.getElementById('suPass').value;
-  const role = document.getElementById('suRole').value;
-  if (!name || !email || !pass) { showErr('suErr','All fields required.'); return; }
-  if (pass.length < 6) { showErr('suErr','Password must be at least 6 characters.'); return; }
-  const btn = document.getElementById('suBtn');
-  btn.classList.add('btn-loading'); btn.textContent = 'Creating…';
-  const { data, error } = await supabase.auth.signUp({
-    email, password: pass,
-    options: { data: { full_name: name, role } }
-  });
-  btn.classList.remove('btn-loading'); btn.textContent = 'Create Account';
-  if (error) { showErr('suErr', error.message); return; }
-  if (data.user && !data.session) {
-    document.getElementById('confirmEmail').textContent = email;
-    showStep('stepConfirm');
-  } else if (data.session) {
-    currentUser = data.user;
-    await loadProfile();
-    launchApp();
-  }
+function doSignup() {
+  const name  = g('suName').value.trim();
+  const email = g('suEmail').value.trim().toLowerCase();
+  const pass  = g('suPass').value;
+  const role  = g('suRole').value;
+  if (!name || !email || !pass) { showErr('suErr','All fields are required.'); return; }
+  if (pass.length < 6)          { showErr('suErr','Password must be at least 6 characters.'); return; }
+  if (users.find(u => u.email === email)) { showErr('suErr','An account with this email already exists.'); return; }
+  const u = { id: uid(), name, email, password: btoa(pass), role, createdAt: now() };
+  users.push(u);
+  session = { userId: u.id };
+  save();
+  launchApp(u);
 }
 
-async function signOut() {
-  await supabase.auth.signOut();
-  currentUser = null; currentProfile = null;
-  document.getElementById('appScreen').style.display = 'none';
-  document.getElementById('authScreen').style.display = 'flex';
-  showStep('stepAuth');
+function doSignout() {
+  session = null;
+  localStorage.setItem(K.session, 'null');
+  document.getElementById('app').style.display  = 'none';
+  document.getElementById('auth').style.display = 'flex';
+  g('siEmail').value = '';
+  g('siPass').value  = '';
+  g('siErr').classList.remove('on');
+  authTab('signin');
 }
 
-async function showReset() {
-  const email = document.getElementById('siEmail').value.trim();
-  if (!email) { showErr('siErr','Enter your email above first.'); return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
-  if (error) { showErr('siErr', error.message); return; }
-  showToast('Password reset email sent!', 'info');
+function launchApp(u) {
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('app').style.display  = 'block';
+  g('uname').textContent = u.name;
+  g('uav').textContent   = initials(u.name);
+  updateBadges();
+  gv('dashboard');
 }
 
-async function loadProfile() {
-  if (!currentUser) return;
-  const { data } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
-  currentProfile = data || { full_name: currentUser.email, role: 'admin', email: currentUser.email };
-}
+function currentUser() { return users.find(u => u.id === session?.userId) || null; }
 
-// ══════════════════════════════════════════
-// APP LAUNCH
-// ══════════════════════════════════════════
-async function launchApp() {
-  document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('appScreen').style.display = 'block';
-  const name = currentProfile?.full_name || currentUser?.email || 'User';
-  document.getElementById('userName').textContent = name;
-  document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
-  await fetchData();
-  showView('dashboard');
-  setupRealtime();
-}
-
-// ══════════════════════════════════════════
-// DATA
-// ══════════════════════════════════════════
-function setSyncStatus(state) {
-  const dot = document.getElementById('syncDot');
-  const lbl = document.getElementById('syncLabel');
-  dot.className = 'sync-dot' + (state==='syncing'?' syncing':state==='error'?' error':'');
-  lbl.textContent = state==='syncing'?'Syncing…':state==='error'?'Error':'Live';
-}
-
-async function fetchData() {
-  setSyncStatus('syncing');
-  try {
-    const [{ data: t }, { data: p }] = await Promise.all([
-      supabase.from('tenants').select('*').order('created_at', { ascending: false }),
-      supabase.from('payments').select('*').order('created_at', { ascending: false })
-    ]);
-    tenants = t || [];
-    payments = p || [];
-    updateBadges();
-    setSyncStatus('live');
-  } catch(e) {
-    setSyncStatus('error');
-    showToast('Failed to load data: ' + e.message, 'error');
-  }
-}
-
-function setupRealtime() {
-  supabase.channel('db-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tenants' }, async () => {
-      await fetchData(); render();
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, async () => {
-      await fetchData(); render();
-    })
-    .subscribe();
-}
-
-function updateBadges() {
-  document.getElementById('nb-tenants').textContent = tenants.length;
-  document.getElementById('nb-payments').textContent = payments.length;
-}
-
-// ══════════════════════════════════════════
-// VIEWS
-// ══════════════════════════════════════════
-function showView(v) {
-  currentView = v;
-  document.querySelectorAll('[id^="nav-"],[id^="ttab-"]').forEach(el => el.classList.remove('active'));
-  const nv = document.getElementById('nav-'+v);
-  const tv = document.getElementById('ttab-'+v);
-  if (nv) nv.classList.add('active');
-  if (tv) tv.classList.add('active');
+// ═══════════════════════════════════════════
+// ROUTING
+// ═══════════════════════════════════════════
+function gv(v) {
+  view = v;
+  document.querySelectorAll('[id^="n-"],[id^="tt-"]').forEach(el => el.classList.remove('on'));
+  const ne = g('n-'+v), te = g('tt-'+v);
+  if (ne) ne.classList.add('on');
+  if (te) te.classList.add('on');
+  updateBadges();
   render();
 }
 
-function filterView(f) {
-  currentFilter = f;
-  showView('tenants');
-  document.querySelectorAll('[id^="nav-f-"]').forEach(el => el.classList.remove('active'));
-  const el = document.getElementById('nav-f-'+f);
-  if (el) el.classList.add('active');
+function fv(f) {
+  filter = f;
+  gv('tenants');
+  document.querySelectorAll('[id^="n-f-"]').forEach(el => el.classList.remove('on'));
+  const el = g('n-f-'+f); if (el) el.classList.add('on');
 }
 
 function render() {
-  const c = document.getElementById('content');
-  c.className = 'content fade-in';
+  const c = g('content');
+  c.className = 'content fade';
   void c.offsetWidth;
-  if (currentView === 'dashboard') c.innerHTML = renderDashboard();
-  else if (currentView === 'tenants') c.innerHTML = renderTenants();
-  else if (currentView === 'payments') c.innerHTML = renderPayments();
-  else if (currentView === 'settings') c.innerHTML = renderSettings();
-  else if (currentView === 'users') c.innerHTML = renderUsers();
+  if      (view === 'dashboard') c.innerHTML = vDashboard();
+  else if (view === 'tenants')   c.innerHTML = vTenants();
+  else if (view === 'payments')  c.innerHTML = vPayments();
+  else if (view === 'users')     c.innerHTML = vUsers();
+  else if (view === 'settings')  c.innerHTML = vSettings();
 }
 
-// ══════════════════════════════════════════
+function updateBadges() {
+  g('nb-t').textContent = tenants.length;
+  g('nb-p').textContent = payments.length;
+}
+
+// ═══════════════════════════════════════════
 // DASHBOARD
-// ══════════════════════════════════════════
-function renderDashboard() {
-  const total = tenants.length;
-  const paidC = tenants.filter(t => t.status === 'paid').length;
-  const dueC = tenants.filter(t => t.status === 'due').length;
-  const partialC = tenants.filter(t => t.status === 'partial').length;
-  const totalCollected = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const monthlyExp = tenants.reduce((s, t) => s + Number(t.rent || 0), 0);
-  const recent = [...payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
+// ═══════════════════════════════════════════
+function vDashboard() {
+  const total   = tenants.length;
+  const paidC   = tenants.filter(t=>t.status==='paid').length;
+  const dueC    = tenants.filter(t=>t.status==='due').length;
+  const partC   = tenants.filter(t=>t.status==='partial').length;
+  const monthly = tenants.reduce((s,t)=>s+num(t.rent),0);
+  const collected = payments.reduce((s,p)=>s+num(p.amount),0);
+  const recent  = [...payments].sort((a,b)=>b.createdAt-a.createdAt).slice(0,6);
 
-  // Bar chart data by apt
-  const aptGroups = {};
+  // bar chart by apt group
+  const aptMap = {};
   tenants.forEach(t => {
-    const apt = t.apt.split(' ').slice(0,3).join(' ');
-    if (!aptGroups[apt]) aptGroups[apt] = 0;
-    aptGroups[apt] += Number(t.rent || 0);
+    const k = (t.apt||'').split(' ').slice(0,3).join(' ');
+    aptMap[k] = (aptMap[k]||0) + num(t.rent);
   });
-  const aptKeys = Object.keys(aptGroups).slice(0, 7);
-  const maxApt = Math.max(...Object.values(aptGroups), 1);
-
-  const barColors = ['#4f8eff','#00e5a0','#a855f7','#ff6b35','#ffd32a','#ff4757','#00b4d8'];
-
-  const barsHTML = aptKeys.map((k, i) => {
-    const h = Math.round((aptGroups[k] / maxApt) * 100);
-    return `<div class="bar-wrap">
-      <div class="bar" style="height:${h}%;background:${barColors[i % barColors.length]};min-height:4px;" data-val="$${aptGroups[k]}/mo"></div>
-      <div class="bar-label">${k.replace(/Apt|Neezoe/gi,'').trim().slice(0,6)}</div>
+  const aptKeys = Object.keys(aptMap).slice(0,7);
+  const maxV = Math.max(...Object.values(aptMap),1);
+  const BCOLS = ['#4f8eff','#00e5a0','#a855f7','#ff6b35','#ffd32a','#ff4757','#00b4d8'];
+  const barsHTML = aptKeys.map((k,i)=>{
+    const h = Math.round(aptMap[k]/maxV*100);
+    return `<div class="bw">
+      <div class="bar" style="height:${h}%;background:${BCOLS[i%BCOLS.length]}" data-v="$${aptMap[k]}/mo"></div>
+      <div class="bar-lbl">${k.replace(/Apt|Neezoe/gi,'').trim().slice(0,7)||k.slice(0,7)}</div>
     </div>`;
   }).join('');
 
-  // Donut
-  const donutData = [
-    { label: 'Paid', val: paidC, color: '#00e5a0' },
-    { label: 'Partial', val: partialC, color: '#ffd32a' },
-    { label: 'Due', val: dueC, color: '#ff4757' },
-  ];
-  const donutTotal = paidC + partialC + dueC || 1;
-  let donutOffset = 0;
-  const r = 54; const circ = 2 * Math.PI * r;
-  const donutSegs = donutData.map(d => {
-    const pct = d.val / donutTotal;
-    const dash = pct * circ;
-    const seg = `<circle cx="64" cy="64" r="${r}" fill="none" stroke="${d.color}" stroke-width="16"
-      stroke-dasharray="${dash} ${circ - dash}" stroke-dashoffset="${-donutOffset}" stroke-linecap="butt"/>`;
-    donutOffset += dash;
-    return seg;
+  // donut
+  const dData = [{l:'Paid',v:paidC,c:'#00e5a0'},{l:'Partial',v:partC,c:'#ffd32a'},{l:'Due',v:dueC,c:'#ff4757'}];
+  const dTotal = paidC+partC+dueC||1;
+  const R=50, circ=2*Math.PI*R; let off=0;
+  const segs = dData.map(d=>{
+    const dash=d.v/dTotal*circ;
+    const s=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${d.c}" stroke-width="14" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-off}" stroke-linecap="butt"/>`;
+    off+=dash; return s;
   }).join('');
+  const legHTML = dData.map(d=>`<div class="leg-item"><div class="leg-dot" style="background:${d.c}"></div><div class="leg-lbl">${d.l}</div><div class="leg-val">${d.v}</div></div>`).join('');
 
-  const legendHTML = donutData.map(d => `
-    <div class="legend-item">
-      <div class="legend-dot" style="background:${d.color}"></div>
-      <div class="legend-label">${d.label}</div>
-      <div class="legend-val">${d.val}</div>
-    </div>`).join('');
-
-  // Activity feed
-  const actHTML = recent.slice(0, 6).map(p => {
-    const t = tenants.find(x => x.id === p.tenant_id) || { name: 'Unknown', apt: '' };
-    return `<div class="activity-item">
-      <div class="activity-icon act-pay">💳</div>
-      <div class="activity-content">
-        <div class="activity-text">${t.name} paid <strong style="color:var(--green)">$${p.amount}</strong> for ${p.months||1} month${(p.months||1)>1?'s':''}</div>
-        <div class="activity-time">${fmtDate(p.date || p.created_at)} · ${t.apt}</div>
+  // activity
+  const actHTML = recent.length ? recent.map(p=>{
+    const t = tenants.find(x=>x.id===p.tenantId)||{name:'Unknown',apt:''};
+    return `<div class="act-item">
+      <div class="act-ic a-pay">💳</div>
+      <div class="act-body">
+        <div class="act-txt">${t.name} paid <strong style="color:var(--grn)">$${p.amount}</strong></div>
+        <div class="act-time">${fmtD(p.date)} · ${t.apt}</div>
       </div>
-      <div class="activity-amount">+$${p.amount}</div>
+      <div class="act-amt">+$${p.amount}</div>
     </div>`;
-  }).join('') || '<div style="color:var(--text3);font-size:0.8rem;padding:16px 0">No payments yet</div>';
+  }).join('') : '<div style="color:var(--t3);font-size:.79rem;padding:12px 0">No payments logged yet</div>';
+
+  // upcoming
+  const today = Date.now();
+  const upHTML = tenants
+    .filter(t=>t.nextDate)
+    .sort((a,b)=>new Date(a.nextDate)-new Date(b.nextDate))
+    .slice(0,6).map(t=>{
+      const diff = Math.ceil((new Date(t.nextDate)-today)/(864e5));
+      const over = diff<0, soon = diff>=0&&diff<=7;
+      const col = over?'var(--red)':soon?'var(--ylw)':'var(--t2)';
+      const lbl = over?`${Math.abs(diff)}d overdue`:diff===0?'Today':`in ${diff}d`;
+      return `<div class="up-item">
+        <div class="up-ic ${over||soon?'a-due':'a-new'}">${over?'⚠️':'📅'}</div>
+        <div style="flex:1"><div style="font-size:.77rem;font-weight:600">${t.name}</div><div style="font-size:.65rem;color:var(--t3)">${t.apt}</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:${col};font-weight:600">${lbl}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--t3);font-size:.79rem;padding:12px 0">No upcoming dates set</div>';
 
   return `
-  <div class="stats-bar">
-    <div class="stat-card s1" onclick="showView('tenants')">
-      <div class="stat-icon">🏘</div>
-      <div class="stat-label">Total Tenants</div>
-      <div class="stat-value">${total}</div>
-      <div class="stat-sub">Across all units</div>
-      <div class="stat-trend trend-up">↑ Active</div>
+  <div class="stats">
+    <div class="sc c1" onclick="gv('tenants')">
+      <div class="sc-ic">🏘</div><div class="sc-lbl">Total Tenants</div>
+      <div class="sc-val">${total}</div><div class="sc-sub">All units combined</div>
+      <div class="sc-tag tag-up">Active</div>
     </div>
-    <div class="stat-card s2" onclick="filterView('paid')">
-      <div class="stat-icon">✅</div>
-      <div class="stat-label">Paid Up</div>
-      <div class="stat-value">${paidC}</div>
-      <div class="stat-sub">${total ? Math.round(paidC/total*100) : 0}% of tenants</div>
-      <div class="stat-trend trend-up">↑ Good</div>
+    <div class="sc c2" onclick="fv('paid')">
+      <div class="sc-ic">✅</div><div class="sc-lbl">Paid Up</div>
+      <div class="sc-val">${paidC}</div><div class="sc-sub">${total?Math.round(paidC/total*100):0}% of tenants</div>
+      <div class="sc-tag tag-up">↑ Good</div>
     </div>
-    <div class="stat-card s3" onclick="showView('payments')">
-      <div class="stat-icon">💰</div>
-      <div class="stat-label">Total Collected</div>
-      <div class="stat-value">$${totalCollected.toLocaleString()}</div>
-      <div class="stat-sub">$${monthlyExp}/mo expected</div>
+    <div class="sc c3" onclick="gv('payments')">
+      <div class="sc-ic">💰</div><div class="sc-lbl">Total Collected</div>
+      <div class="sc-val">$${collected.toLocaleString()}</div><div class="sc-sub">$${monthly}/mo expected</div>
     </div>
-    <div class="stat-card s4" onclick="filterView('due')">
-      <div class="stat-icon">⚠️</div>
-      <div class="stat-label">Overdue</div>
-      <div class="stat-value">${dueC}</div>
-      <div class="stat-sub">${partialC} partial payments</div>
-      ${dueC > 0 ? '<div class="stat-trend trend-down">↓ Needs attention</div>' : ''}
+    <div class="sc c4" onclick="fv('due')">
+      <div class="sc-ic">⚠️</div><div class="sc-lbl">Overdue</div>
+      <div class="sc-val">${dueC}</div><div class="sc-sub">${partC} partial payments</div>
+      ${dueC>0?'<div class="sc-tag tag-dn">Needs attention</div>':''}
     </div>
   </div>
 
   <div class="chart-row">
-    <div class="chart-card">
-      <div class="chart-title"><span>Monthly Rent by Unit</span> <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--text3)">$${monthlyExp}/mo total</span></div>
-      <div class="bar-chart">${barsHTML || '<div style="color:var(--text3);font-size:0.8rem">No data yet</div>'}</div>
+    <div class="card">
+      <div class="card-title"><span>Rent by Unit Group</span><span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--t3)">$${monthly}/mo total</span></div>
+      <div class="bars">${barsHTML||'<div style="color:var(--t3);font-size:.79rem">Add tenants to see chart</div>'}</div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title"><span>Payment Status</span></div>
+    <div class="card">
+      <div class="card-title"><span>Payment Status</span></div>
       <div class="donut-wrap">
-        <svg class="donut-svg" width="128" height="128" viewBox="0 0 128 128">
-          <circle cx="64" cy="64" r="54" fill="none" stroke="var(--surface3)" stroke-width="16"/>
-          ${donutSegs}
+        <svg class="donut-svg" width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--s3)" stroke-width="14"/>
+          ${segs}
         </svg>
-        <div class="donut-legend">${legendHTML}</div>
+        <div class="leg">${legHTML}</div>
       </div>
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="chart-card">
-      <div class="chart-title"><span>Recent Activity</span>
-        <button class="btn btn-ghost btn-xs" onclick="showView('payments')">View all →</button>
-      </div>
-      <div class="activity-feed">${actHTML}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="card-title"><span>Recent Payments</span><button class="btn btn-ghost btn-xs" onclick="gv('payments')">View all →</button></div>
+      <div class="act-list">${actHTML}</div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title"><span>Upcoming Payments</span></div>
-      ${renderUpcoming()}
+    <div class="card">
+      <div class="card-title"><span>Upcoming Due Dates</span></div>
+      ${upHTML}
     </div>
   </div>`;
 }
 
-function renderUpcoming() {
-  const today = new Date();
-  const upcoming = tenants
-    .filter(t => t.next_date)
-    .sort((a, b) => new Date(a.next_date) - new Date(b.next_date))
-    .slice(0, 6);
-
-  if (!upcoming.length) return '<div style="color:var(--text3);font-size:0.8rem;padding:10px 0">No upcoming dates set</div>';
-
-  return upcoming.map(t => {
-    const nd = new Date(t.next_date);
-    const diff = Math.ceil((nd - today) / (1000*60*60*24));
-    const isOverdue = diff < 0;
-    const isSoon = diff >= 0 && diff <= 7;
-    const color = isOverdue ? 'var(--red)' : isSoon ? 'var(--yellow)' : 'var(--text2)';
-    const label = isOverdue ? `${Math.abs(diff)}d overdue` : diff === 0 ? 'Today' : `in ${diff}d`;
-    return `<div class="activity-item">
-      <div class="activity-icon ${isOverdue ? 'act-due' : isSoon ? 'act-due' : 'act-new'}">${isOverdue?'!':'📅'}</div>
-      <div class="activity-content">
-        <div class="activity-text" style="font-size:0.79rem">${t.name}</div>
-        <div class="activity-time">${t.apt}</div>
-      </div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:${color};font-weight:600">${label}</div>
-    </div>`;
-  }).join('');
-}
-
-// ══════════════════════════════════════════
-// TENANTS
-// ══════════════════════════════════════════
-const COLORS = [
-  {bg:'rgba(79,142,255,0.12)',color:'#4f8eff'},{bg:'rgba(0,229,160,0.12)',color:'#00e5a0'},
-  {bg:'rgba(168,85,247,0.12)',color:'#a855f7'},{bg:'rgba(255,107,53,0.12)',color:'#ff6b35'},
-  {bg:'rgba(255,211,42,0.12)',color:'#ffd32a'},{bg:'rgba(255,71,87,0.12)',color:'#ff4757'},
+// ═══════════════════════════════════════════
+// TENANTS VIEW
+// ═══════════════════════════════════════════
+const COLS=[
+  {bg:'rgba(79,142,255,.12)',c:'#4f8eff'},{bg:'rgba(0,229,160,.12)',c:'#00e5a0'},
+  {bg:'rgba(168,85,247,.12)',c:'#a855f7'},{bg:'rgba(255,107,53,.12)',c:'#ff6b35'},
+  {bg:'rgba(255,211,42,.12)',c:'#ffd32a'},{bg:'rgba(255,71,87,.12)',c:'#ff4757'},
 ];
-const getColor = i => COLORS[i % COLORS.length];
+const gc = i => COLS[i%COLS.length];
 const initials = n => (n||'?').split(' ').map(p=>p[0]||'').join('').toUpperCase().slice(0,2);
 
-function statusBadge(s) {
-  if (s==='paid') return '<span class="badge b-paid">Paid</span>';
-  if (s==='due') return '<span class="badge b-due">Due</span>';
-  return '<span class="badge b-partial">Partial</span>';
+function badge(s) {
+  if(s==='paid')    return '<span class="badge bp">Paid</span>';
+  if(s==='due')     return '<span class="badge bd">Due</span>';
+  return '<span class="badge bx">Partial</span>';
 }
 
-function tenantCard(t, i) {
-  const c = getColor(i);
-  const pct = Math.min(100, t.months_paid ? Math.round(t.months_paid / (t.months_paid + 3) * 100) : 0);
-  const barColor = t.status==='due'?'var(--red)':t.status==='partial'?'var(--yellow)':'var(--green)';
-  const isAdmin = currentProfile?.role === 'admin';
-  return `<div class="tenant-card s-${t.status}" onclick="showDetail('${t.id}')">
-    <div class="tc-head">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="tc-avatar" style="background:${c.bg};color:${c.color}">${initials(t.name)}</div>
-        <div><div class="tc-name">${t.name}</div><div class="tc-apt">${t.apt}</div></div>
+function tCard(t,i) {
+  const col = gc(i);
+  const pct = Math.min(100, t.monthsPaid ? Math.round(t.monthsPaid/(t.monthsPaid+3)*100) : 0);
+  const bc  = t.status==='due'?'var(--red)':t.status==='partial'?'var(--ylw)':'var(--grn)';
+  const isAdmin = currentUser()?.role === 'admin';
+  return `<div class="tc s${t.status[0]}" onclick="showDetail('${t.id}')">
+    <div class="tc-hd">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="tav" style="background:${col.bg};color:${col.c}">${initials(t.name)}</div>
+        <div><div class="tn">${t.name}</div><div class="ta">${t.apt}</div></div>
       </div>
-      ${statusBadge(t.status)}
+      ${badge(t.status)}
     </div>
-    <div class="tc-meta">
-      <div><div class="meta-lbl">Monthly Rent</div><div class="meta-val">$${t.rent}</div></div>
-      <div><div class="meta-lbl">Total Paid</div><div class="meta-val">$${Number(t.amt_paid||0).toLocaleString()}</div></div>
-      <div><div class="meta-lbl">Months</div><div class="meta-val">${t.months_paid||0}</div></div>
-      <div><div class="meta-lbl">Next Due</div><div class="meta-val" style="font-size:0.7rem">${fmtDate(t.next_date)}</div></div>
+    <div class="tm">
+      <div><div class="ml">Monthly Rent</div><div class="mv">$${t.rent}</div></div>
+      <div><div class="ml">Total Paid</div><div class="mv">$${num(t.amtPaid).toLocaleString()}</div></div>
+      <div><div class="ml">Months</div><div class="mv">${t.monthsPaid||0}</div></div>
+      <div><div class="ml">Next Due</div><div class="mv" style="font-size:.68rem">${fmtD(t.nextDate)}</div></div>
     </div>
-    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
-    ${isAdmin ? `<div class="tc-actions" onclick="event.stopPropagation()">
-      <button class="btn btn-ghost btn-xs" onclick="editTenant('${t.id}')">Edit</button>
-      <button class="btn btn-green btn-xs" onclick="openPaymentModalForTenant('${t.id}')">+ Pay</button>
-      <button class="btn btn-danger btn-xs" onclick="confirmDeleteTenant('${t.id}')">Delete</button>
-    </div>` : ''}
+    <div class="pbar"><div class="pfill" style="width:${pct}%;background:${bc}"></div></div>
+    ${isAdmin?`<div class="tc-acts" onclick="event.stopPropagation()">
+      <button class="btn btn-ghost btn-xs" onclick="editT('${t.id}')">Edit</button>
+      <button class="btn btn-grn btn-xs" onclick="openPMFor('${t.id}')">+ Pay</button>
+      <button class="btn btn-red btn-xs" onclick="confirmDel('${t.id}')">Delete</button>
+    </div>`:''}
   </div>`;
 }
 
-function renderTenants() {
-  let list = currentFilter === 'all' ? tenants : tenants.filter(t => t.status === currentFilter);
-  const isAdmin = currentProfile?.role === 'admin';
-  return `<div class="section-header">
-    <div class="section-title">Tenants (${list.length})</div>
-    <div class="section-actions">
-      <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" id="tenantSearch" placeholder="Search name or unit…" oninput="searchTenants(this.value)" style="padding-left:32px;width:200px;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:9px 12px 9px 32px;border-radius:var(--r-sm);font-size:0.78rem;outline:none;"></div>
-      ${isAdmin ? `<button class="btn btn-accent btn-sm" onclick="openTenantModal()">+ Add Tenant</button>` : ''}
+function vTenants() {
+  const list = filter==='all' ? tenants : tenants.filter(t=>t.status===filter);
+  const isAdmin = currentUser()?.role === 'admin';
+  return `<div class="sec-hd">
+    <div class="sec-title">Tenants (${list.length})</div>
+    <div class="sec-acts">
+      <input class="srch" placeholder="Search…" oninput="searchT(this.value)" id="tsrch">
+      ${isAdmin?`<button class="btn btn-acc btn-sm" onclick="openTM()">+ Add</button>`:''}
     </div>
   </div>
-  <div class="tenant-grid" id="tenantGrid">
-    ${list.length === 0
-      ? '<div class="empty-state"><div class="e-icon">🏠</div><div class="e-text">No tenants found</div></div>'
-      : list.map((t, i) => tenantCard(t, i)).join('')}
+  <div class="tgrid" id="tgrid">
+    ${list.length ? list.map((t,i)=>tCard(t,i)).join('') : '<div class="empty"><div class="empty-ic">🏠</div><div>No tenants found</div></div>'}
   </div>`;
 }
 
-function searchTenants(q) {
-  const grid = document.getElementById('tenantGrid');
-  if (!grid) return;
+function searchT(q) {
+  const grid = g('tgrid'); if(!grid) return;
   const lq = q.toLowerCase();
-  const filtered = tenants.filter(t =>
-    t.name.toLowerCase().includes(lq) || t.apt.toLowerCase().includes(lq) || (t.phone||'').includes(lq)
-  );
-  grid.innerHTML = filtered.length === 0
-    ? '<div class="empty-state"><div class="e-icon">🔍</div><div class="e-text">No matches</div></div>'
-    : filtered.map((t, i) => tenantCard(t, i)).join('');
+  const fl = tenants.filter(t=>t.name.toLowerCase().includes(lq)||t.apt.toLowerCase().includes(lq)||(t.phone||'').includes(lq));
+  grid.innerHTML = fl.length ? fl.map((t,i)=>tCard(t,i)).join('') : '<div class="empty"><div class="empty-ic">🔍</div><div>No matches</div></div>';
 }
 
-// ══════════════════════════════════════════
-// PAYMENTS
-// ══════════════════════════════════════════
-function renderPayments() {
-  const sorted = [...payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  const total = sorted.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const isAdmin = currentProfile?.role === 'admin';
-  return `<div class="section-header">
-    <div class="section-title">Payment Log</div>
-    <div class="section-actions">
-      <span class="mono" style="font-size:0.8rem;color:var(--green)">Total: $${total.toLocaleString()}</span>
-      ${isAdmin ? `<button class="btn btn-accent btn-sm" onclick="openPaymentModal()">+ Log Payment</button>` : ''}
+// ═══════════════════════════════════════════
+// PAYMENTS VIEW
+// ═══════════════════════════════════════════
+function vPayments() {
+  const sorted = [...payments].sort((a,b)=>b.createdAt-a.createdAt);
+  const total  = sorted.reduce((s,p)=>s+num(p.amount),0);
+  const isAdmin = currentUser()?.role === 'admin';
+  return `<div class="sec-hd">
+    <div class="sec-title">Payment Log</div>
+    <div class="sec-acts">
+      <span class="mono" style="font-size:.79rem;color:var(--grn)">Total: $${total.toLocaleString()}</span>
+      ${isAdmin?`<button class="btn btn-acc btn-sm" onclick="openPM()">+ Log Payment</button>`:''}
     </div>
   </div>
-  <div class="table-wrap">
+  <div class="tbl-wrap">
     <table>
       <thead><tr><th>Tenant</th><th>Unit</th><th>Amount</th><th>Months</th><th>Date Paid</th><th>Next Due</th><th>Notes</th></tr></thead>
       <tbody>
-        ${sorted.length === 0
-          ? `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:28px">No payments logged yet</td></tr>`
-          : sorted.map(p => {
-              const t = tenants.find(x => x.id === p.tenant_id) || { name: 'Unknown', apt: '' };
-              return `<tr>
-                <td style="font-weight:600">${t.name}</td>
-                <td style="font-size:0.7rem;color:var(--text3)">${t.apt}</td>
-                <td class="mono" style="color:var(--green)">+$${Number(p.amount).toLocaleString()}</td>
-                <td class="mono">${p.months||'—'}</td>
-                <td>${fmtDate(p.date)}</td>
-                <td>${fmtDate(p.next_date)}</td>
-                <td style="color:var(--text3);font-size:0.73rem">${p.notes||'—'}</td>
-              </tr>`;
-            }).join('')}
+        ${sorted.length ? sorted.map(p=>{
+          const t=tenants.find(x=>x.id===p.tenantId)||{name:'Unknown',apt:''};
+          return `<tr>
+            <td style="font-weight:600">${t.name}</td>
+            <td style="font-size:.69rem;color:var(--t3)">${t.apt}</td>
+            <td class="mono" style="color:var(--grn)">+$${num(p.amount).toLocaleString()}</td>
+            <td class="mono">${p.months||'—'}</td>
+            <td>${fmtD(p.date)}</td>
+            <td>${fmtD(p.nextDate)}</td>
+            <td style="color:var(--t3);font-size:.72rem">${p.notes||'—'}</td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:28px">No payments logged yet</td></tr>'}
       </tbody>
     </table>
   </div>`;
 }
 
-// ══════════════════════════════════════════
-// DETAIL
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// DETAIL MODAL
+// ═══════════════════════════════════════════
 function showDetail(id) {
-  const t = tenants.find(x => x.id === id);
-  if (!t) return;
+  const t = tenants.find(x=>x.id===id); if(!t) return;
   const ci = tenants.indexOf(t);
-  const c = getColor(ci);
-  const tPays = payments.filter(p => p.tenant_id === id).sort((a,b) => new Date(b.created_at)-new Date(a.created_at));
-  const isAdmin = currentProfile?.role === 'admin';
+  const col = gc(ci);
+  const tPays = payments.filter(p=>p.tenantId===id).sort((a,b)=>b.createdAt-a.createdAt);
+  const isAdmin = currentUser()?.role==='admin';
 
-  document.getElementById('detailTitle').textContent = t.name;
-  document.getElementById('detailBody').innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
-      <div class="tc-avatar" style="width:48px;height:48px;font-size:1.1rem;border-radius:12px;background:${c.bg};color:${c.color}">${initials(t.name)}</div>
+  g('dtTitle').textContent = t.name;
+  g('dtBody').innerHTML = `
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:18px">
+      <div class="tav" style="width:46px;height:46px;font-size:1.05rem;border-radius:11px;background:${col.bg};color:${col.c}">${initials(t.name)}</div>
       <div>
-        <div style="font-weight:700;font-size:0.95rem">${t.name}</div>
-        <div style="font-size:0.72rem;color:var(--text3);margin-top:2px">${t.apt}</div>
-        <div style="margin-top:6px">${statusBadge(t.status)}</div>
+        <div style="font-weight:700;font-size:.93rem">${t.name}</div>
+        <div style="font-size:.7rem;color:var(--t3);margin-top:2px">${t.apt}</div>
+        <div style="margin-top:5px">${badge(t.status)}</div>
       </div>
     </div>
-    <div class="detail-grid">
-      <div class="detail-item"><div class="meta-lbl">Monthly Rent</div><div class="meta-val mono">$${t.rent}</div></div>
-      <div class="detail-item"><div class="meta-lbl">Total Paid</div><div class="meta-val mono">$${Number(t.amt_paid||0).toLocaleString()}</div></div>
-      <div class="detail-item"><div class="meta-lbl">Months Paid</div><div class="meta-val mono">${t.months_paid||0}</div></div>
-      <div class="detail-item"><div class="meta-lbl">Phone</div><div class="meta-val" style="font-size:0.75rem">${t.phone||'—'}</div></div>
-      <div class="detail-item"><div class="meta-lbl">Next Due</div><div class="meta-val" style="font-size:0.75rem">${fmtDate(t.next_date)}</div></div>
-      <div class="detail-item"><div class="meta-lbl">Notes</div><div class="meta-val" style="font-size:0.75rem">${t.comment||'—'}</div></div>
+    <div class="dgrid">
+      <div class="di"><div class="ml">Monthly Rent</div><div class="mv mono">$${t.rent}</div></div>
+      <div class="di"><div class="ml">Total Paid</div><div class="mv mono">$${num(t.amtPaid).toLocaleString()}</div></div>
+      <div class="di"><div class="ml">Months Paid</div><div class="mv mono">${t.monthsPaid||0}</div></div>
+      <div class="di"><div class="ml">Phone</div><div class="mv" style="font-size:.72rem">${t.phone||'—'}</div></div>
+      <div class="di"><div class="ml">Next Due</div><div class="mv" style="font-size:.72rem">${fmtD(t.nextDate)}</div></div>
+      <div class="di"><div class="ml">Notes</div><div class="mv" style="font-size:.72rem">${t.comment||'—'}</div></div>
     </div>
-    <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);margin-bottom:10px;font-weight:700">Payment History (${tPays.length})</div>
-    ${tPays.length === 0
-      ? '<div style="color:var(--text3);font-size:0.8rem;padding:10px 0">No payment records yet.</div>'
-      : tPays.map(p => `<div class="plog-entry">
-          <div class="plog-icon">↓</div>
-          <div class="plog-info">
-            <div class="plog-desc">$${p.amount} · ${p.months||1} month${(p.months||1)>1?'s':''}</div>
-            <div class="plog-date">${fmtDate(p.date)} · Next: ${fmtDate(p.next_date)}${p.notes?' · '+p.notes:''}</div>
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:9px;font-weight:700">Payment History (${tPays.length})</div>
+    <div class="plog">
+      ${tPays.length ? tPays.map(p=>`
+        <div class="pl-item">
+          <div class="pl-ic">↓</div>
+          <div class="pl-info">
+            <div class="pl-desc">$${p.amount} · ${p.months||1} month${(p.months||1)>1?'s':''}</div>
+            <div class="pl-date">${fmtD(p.date)} · Next: ${fmtD(p.nextDate)}${p.notes?' · '+p.notes:''}</div>
           </div>
-          <div class="plog-amt">+$${p.amount}</div>
-        </div>`).join('')}
-    ${isAdmin ? `<div class="modal-actions">
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('detailModal');editTenant('${t.id}')">Edit Tenant</button>
-      <button class="btn btn-accent btn-sm" onclick="closeModal('detailModal');openPaymentModalForTenant('${t.id}')">+ Log Payment</button>
-    </div>` : ''}`;
-  openModal('detailModal');
+          <div class="pl-amt">+$${p.amount}</div>
+        </div>`).join('') : '<div style="color:var(--t3);font-size:.78rem;padding:10px 0">No payment records yet.</div>'}
+    </div>
+    ${isAdmin?`<div class="macts">
+      <button class="btn btn-ghost btn-sm" onclick="cm('dtModal');editT('${t.id}')">Edit Tenant</button>
+      <button class="btn btn-acc btn-sm" onclick="cm('dtModal');openPMFor('${t.id}')">+ Log Payment</button>
+    </div>`:''}`;
+  om('dtModal');
 }
 
-// ══════════════════════════════════════════
-// SETTINGS & USERS
-// ══════════════════════════════════════════
-function renderSettings() {
-  const cfg = loadConfig();
-  return `<div class="section-header"><div class="section-title">Settings</div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="chart-card">
-      <div class="chart-title"><span>Your Account</span></div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <div class="user-row-avatar" style="width:48px;height:48px;font-size:1.1rem">${initials(currentProfile?.full_name||'?')}</div>
-        <div>
-          <div style="font-weight:700">${currentProfile?.full_name||'Unknown'}</div>
-          <div style="font-size:0.75rem;color:var(--text3)">${currentProfile?.email||currentUser?.email||''}</div>
-          <div style="margin-top:5px"><span class="role-badge ${currentProfile?.role==='admin'?'role-admin':'role-viewer'}">${currentProfile?.role||'viewer'}</span></div>
-        </div>
-      </div>
-      <button class="btn btn-danger btn-sm btn-full" onclick="signOut()">Sign Out</button>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title"><span>Database</span></div>
-      <div style="font-size:0.75rem;color:var(--text2);margin-bottom:12px;line-height:1.6">
-        Connected to: <span class="mono" style="color:var(--accent3);font-size:0.7rem">${cfg?.url||'—'}</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="fetchData().then(render);showToast('Data refreshed','success')">🔄 Refresh Data</button>
-        <button class="btn btn-danger btn-sm" onclick="if(confirm('Disconnect? You will need to re-enter credentials.')){localStorage.removeItem('${CFG_KEY}');location.reload();}">Disconnect Database</button>
-      </div>
-    </div>
-    <div class="chart-card" style="grid-column:1/-1">
-      <div class="chart-title"><span>Stats</span></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-        <div class="detail-item"><div class="meta-lbl">Tenants</div><div class="meta-val mono">${tenants.length}</div></div>
-        <div class="detail-item"><div class="meta-lbl">Payments</div><div class="meta-val mono">${payments.length}</div></div>
-        <div class="detail-item"><div class="meta-lbl">Total Collected</div><div class="meta-val mono">$${payments.reduce((s,p)=>s+Number(p.amount||0),0).toLocaleString()}</div></div>
-        <div class="detail-item"><div class="meta-lbl">Monthly Income</div><div class="meta-val mono">$${tenants.reduce((s,t)=>s+Number(t.rent||0),0).toLocaleString()}</div></div>
-      </div>
-    </div>
-  </div>`;
-}
-
-async function renderUsers() {
-  const { data: profiles } = await supabase.from('profiles').select('*').order('created_at');
-  const list = profiles || [];
-  const isAdmin = currentProfile?.role === 'admin';
-
-  return `<div class="section-header">
-    <div class="section-title">Users (${list.length})</div>
-    ${isAdmin ? `<button class="btn btn-accent btn-sm" onclick="openInviteModal()">+ Invite User</button>` : ''}
+// ═══════════════════════════════════════════
+// USERS VIEW
+// ═══════════════════════════════════════════
+function vUsers() {
+  const me = currentUser();
+  const isAdmin = me?.role==='admin';
+  return `<div class="sec-hd">
+    <div class="sec-title">Users (${users.length})</div>
+    ${isAdmin?`<button class="btn btn-acc btn-sm" onclick="openAddUser()">+ Add User</button>`:''}
   </div>
-  <div class="users-list">
-    ${list.map(u => `
-      <div class="user-row">
-        <div class="user-row-avatar">${initials(u.full_name||u.email||'?')}</div>
-        <div class="user-row-info">
-          <div class="user-row-email">${u.full_name||'—'}</div>
-          <div class="user-row-meta">${u.email} · Joined ${fmtDate(u.created_at)}</div>
+  <div class="ulist">
+    ${users.map(u=>`
+      <div class="urow">
+        <div class="urow-av">${initials(u.name)}</div>
+        <div class="urow-info">
+          <div class="urow-name">${u.name} ${u.id===me?.id?'<span style="font-size:.62rem;color:var(--t3)">(you)</span>':''}</div>
+          <div class="urow-meta">${u.email} · Joined ${fmtD(u.createdAt)}</div>
         </div>
-        <span class="role-badge ${u.role==='admin'?'role-admin':'role-viewer'}">${u.role||'viewer'}</span>
-        ${isAdmin && u.id !== currentUser?.id ? `
-          <div class="user-row-actions">
-            <button class="btn btn-ghost btn-xs" onclick="toggleRole('${u.id}','${u.role}')">${u.role==='admin'?'Make Viewer':'Make Admin'}</button>
-          </div>` : ''}
+        <span class="role-badge ${u.role==='admin'?'r-admin':'r-viewer'}">${u.role}</span>
+        ${isAdmin?`<div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-xs" onclick="openEditUser('${u.id}')">Edit</button>
+          ${u.id!==me?.id?`<button class="btn btn-red btn-xs" onclick="confirmDelUser('${u.id}')">Remove</button>`:''}
+        </div>`:''}
       </div>`).join('')}
   </div>`;
 }
 
-async function toggleRole(uid, currentRole) {
-  const newRole = currentRole === 'admin' ? 'viewer' : 'admin';
-  const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', uid);
-  if (error) { showToast('Failed to update role', 'error'); return; }
-  showToast(`Role updated to ${newRole}`, 'success');
-  showView('users');
+function openAddUser() { authTab('signup'); doSignout(); }
+
+function openEditUser(id) {
+  const u = users.find(x=>x.id===id); if(!u) return;
+  g('euId').value = u.id;
+  g('euName').value = u.name;
+  g('euRole').value = u.role;
+  g('euPass').value = '';
+  om('euModal');
 }
 
-function openInviteModal() {
-  document.getElementById('appUrlInput').value = window.location.href;
-  openModal('inviteModal');
-}
-function copyAppUrl() {
-  navigator.clipboard.writeText(window.location.href);
-  showToast('URL copied to clipboard!', 'success');
+function saveUser() {
+  const id   = g('euId').value;
+  const name = g('euName').value.trim();
+  const role = g('euRole').value;
+  const pass = g('euPass').value;
+  if (!name) { toast('Name is required','e'); return; }
+  const i = users.findIndex(u=>u.id===id);
+  if (i<0) return;
+  users[i].name = name;
+  users[i].role = role;
+  if (pass) {
+    if (pass.length<6) { toast('Password must be 6+ characters','e'); return; }
+    users[i].password = btoa(pass);
+  }
+  save();
+  // update topbar if editing self
+  const me = currentUser();
+  if (me?.id===id) { g('uname').textContent=name; g('uav').textContent=initials(name); }
+  cm('euModal');
+  toast('User updated','s');
+  if (view==='users') render();
 }
 
-// ══════════════════════════════════════════
+function confirmDelUser(id) {
+  const u = users.find(x=>x.id===id); if(!u) return;
+  g('cfTitle').textContent = 'Remove User';
+  g('cfMsg').textContent   = `Remove "${u.name}" (${u.email})? They will no longer be able to sign in.`;
+  g('cfOk').onclick = () => {
+    users = users.filter(x=>x.id!==id);
+    save(); cm('cfModal'); toast('User removed','i');
+    if(view==='users') render();
+  };
+  om('cfModal');
+}
+
+// ═══════════════════════════════════════════
+// SETTINGS VIEW
+// ═══════════════════════════════════════════
+function vSettings() {
+  const me = currentUser();
+  const stored = (() => {
+    let b=0;
+    [K.users,K.tenants,K.payments].forEach(k=>b+=(localStorage.getItem(k)||'').length);
+    return (b/1024).toFixed(1);
+  })();
+  return `<div class="sec-hd"><div class="sec-title">Settings</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="card-title"><span>Your Account</span></div>
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
+        <div class="urow-av" style="width:46px;height:46px;font-size:1rem">${initials(me?.name||'?')}</div>
+        <div>
+          <div style="font-weight:700">${me?.name||'Unknown'}</div>
+          <div style="font-size:.73rem;color:var(--t3)">${me?.email||''}</div>
+          <div style="margin-top:5px"><span class="role-badge ${me?.role==='admin'?'r-admin':'r-viewer'}">${me?.role||'viewer'}</span></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-ghost btn-sm btn-full" onclick="openEditUser('${me?.id}')">✏️ Edit My Profile</button>
+        <button class="btn btn-red btn-sm btn-full" onclick="doSignout()">Sign Out</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>Data & Storage</span></div>
+      <div style="font-size:.73rem;color:var(--t2);line-height:1.8;margin-bottom:14px">
+        Storage used: <span class="mono" style="color:var(--acc)">${stored} KB</span><br>
+        Tenants: <strong>${tenants.length}</strong> &nbsp;|&nbsp; Payments: <strong>${payments.length}</strong><br>
+        Users: <strong>${users.length}</strong>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export Backup (JSON)</button>
+        <label class="btn btn-ghost btn-sm btn-full" style="cursor:pointer;justify-content:center">⬆ Import Backup <input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+        <button class="btn btn-red btn-sm" onclick="confirmClear()">🗑 Clear All Data</button>
+      </div>
+    </div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title"><span>Summary</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px">
+        <div class="di"><div class="ml">Tenants</div><div class="mv mono">${tenants.length}</div></div>
+        <div class="di"><div class="ml">Payments</div><div class="mv mono">${payments.length}</div></div>
+        <div class="di"><div class="ml">Total Collected</div><div class="mv mono">$${payments.reduce((s,p)=>s+num(p.amount),0).toLocaleString()}</div></div>
+        <div class="di"><div class="ml">Monthly Income</div><div class="mv mono">$${tenants.reduce((s,t)=>s+num(t.rent),0).toLocaleString()}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
 // TENANT CRUD
-// ══════════════════════════════════════════
-function openTenantModal(id) {
-  document.getElementById('tenantModalTitle').textContent = id ? 'Edit Tenant' : 'Add Tenant';
-  document.getElementById('tId').value = id || '';
-  if (!id) {
-    ['tName','tApt','tPhone','tComment'].forEach(x => document.getElementById(x).value = '');
-    ['tRent','tAmtPaid','tMonthsPaid'].forEach(x => document.getElementById(x).value = '');
-    document.getElementById('tStatus').value = 'paid';
-    document.getElementById('tNextDate').value = '';
+// ═══════════════════════════════════════════
+function openTM(id) {
+  g('tmTitle').textContent = id ? 'Edit Tenant' : 'Add Tenant';
+  g('tmId').value = id||'';
+  g('tmErr').style.display='none';
+  if(!id){
+    ['tmName','tmApt','tmPhone','tmNote'].forEach(x=>g(x).value='');
+    ['tmRent','tmPaid','tmMonths'].forEach(x=>g(x).value='');
+    g('tmStatus').value='paid'; g('tmNext').value='';
   } else {
-    const t = tenants.find(x => x.id === id);
-    if (!t) return;
-    document.getElementById('tName').value = t.name;
-    document.getElementById('tApt').value = t.apt;
-    document.getElementById('tRent').value = t.rent;
-    document.getElementById('tPhone').value = t.phone || '';
-    document.getElementById('tStatus').value = t.status;
-    document.getElementById('tNextDate').value = t.next_date || '';
-    document.getElementById('tAmtPaid').value = t.amt_paid || 0;
-    document.getElementById('tMonthsPaid').value = t.months_paid || 0;
-    document.getElementById('tComment').value = t.comment || '';
+    const t=tenants.find(x=>x.id===id); if(!t) return;
+    g('tmName').value=t.name; g('tmApt').value=t.apt; g('tmRent').value=t.rent;
+    g('tmPhone').value=t.phone||''; g('tmStatus').value=t.status;
+    g('tmNext').value=t.nextDate||''; g('tmPaid').value=t.amtPaid||0;
+    g('tmMonths').value=t.monthsPaid||0; g('tmNote').value=t.comment||'';
   }
-  document.getElementById('tErr').style.display = 'none';
-  openModal('tenantModal');
+  om('tmModal');
 }
-function editTenant(id) { openTenantModal(id); }
+function editT(id){ openTM(id); }
 
-async function saveTenant() {
-  const name = document.getElementById('tName').value.trim();
-  const apt = document.getElementById('tApt').value.trim();
-  const rent = parseFloat(document.getElementById('tRent').value) || 0;
-  if (!name || !apt) { showErr('tErr', 'Name and apartment are required.'); return; }
-  const id = document.getElementById('tId').value;
-  const payload = {
-    name, apt, rent,
-    phone: document.getElementById('tPhone').value.trim(),
-    status: document.getElementById('tStatus').value,
-    next_date: document.getElementById('tNextDate').value || null,
-    amt_paid: parseFloat(document.getElementById('tAmtPaid').value) || 0,
-    months_paid: parseInt(document.getElementById('tMonthsPaid').value) || 0,
-    comment: document.getElementById('tComment').value.trim(),
+function saveTenant() {
+  const name = g('tmName').value.trim();
+  const apt  = g('tmApt').value.trim();
+  const rent = parseFloat(g('tmRent').value)||0;
+  if(!name||!apt){ showErr2('tmErr','Name and apartment are required.'); return; }
+  const id = g('tmId').value;
+  const data = {
+    name,apt,rent,
+    phone: g('tmPhone').value.trim(),
+    status: g('tmStatus').value,
+    nextDate: g('tmNext').value||null,
+    amtPaid: parseFloat(g('tmPaid').value)||0,
+    monthsPaid: parseInt(g('tmMonths').value)||0,
+    comment: g('tmNote').value.trim(),
   };
-  const btn = document.getElementById('tSaveBtn');
-  btn.classList.add('btn-loading'); btn.textContent = 'Saving…';
-  let error;
-  if (id) {
-    ({ error } = await supabase.from('tenants').update(payload).eq('id', id));
-  } else {
-    payload.created_by = currentUser.id;
-    ({ error } = await supabase.from('tenants').insert(payload));
-  }
-  btn.classList.remove('btn-loading'); btn.textContent = 'Save Tenant';
-  if (error) { showErr('tErr', error.message); return; }
-  closeModal('tenantModal');
-  await fetchData(); render();
-  showToast(id ? 'Tenant updated' : 'Tenant added', 'success');
+  if(id){ const i=tenants.findIndex(x=>x.id===id); if(i>=0) tenants[i]={...tenants[i],...data}; }
+  else  { tenants.unshift({id:uid(),createdAt:Date.now(),...data}); }
+  save(); cm('tmModal'); render(); updateBadges();
+  toast(id?'Tenant updated':'Tenant added','s');
 }
 
-function confirmDeleteTenant(id) {
-  const t = tenants.find(x => x.id === id);
-  document.getElementById('confirmTitle').textContent = 'Delete Tenant';
-  document.getElementById('confirmMsg').textContent = `Delete "${t?.name}"? All payment records for this tenant will also be deleted. This cannot be undone.`;
-  document.getElementById('confirmOkBtn').onclick = async () => {
-    await supabase.from('tenants').delete().eq('id', id);
-    closeModal('confirmModal');
-    await fetchData(); render();
-    showToast('Tenant deleted', 'info');
-  };
-  openModal('confirmModal');
+function confirmDel(id) {
+  const t=tenants.find(x=>x.id===id); if(!t) return;
+  g('cfTitle').textContent='Delete Tenant';
+  g('cfMsg').textContent=`Delete "${t.name}"? All their payment records will also be removed. This cannot be undone.`;
+  g('cfOk').onclick=()=>{ tenants=tenants.filter(x=>x.id!==id); payments=payments.filter(p=>p.tenantId!==id); save(); cm('cfModal'); render(); updateBadges(); toast('Tenant deleted','i'); };
+  om('cfModal');
 }
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════
 // PAYMENT CRUD
-// ══════════════════════════════════════════
-function openPaymentModal() {
-  const sel = document.getElementById('pTenant');
-  sel.innerHTML = tenants.map(t => `<option value="${t.id}">${t.name} — ${t.apt}</option>`).join('');
-  document.getElementById('pAmount').value = '';
-  document.getElementById('pDate').value = new Date().toISOString().split('T')[0];
-  document.getElementById('pMonths').value = '1';
-  document.getElementById('pNextDate').value = '';
-  document.getElementById('pNotes').value = '';
-  document.getElementById('pErr').style.display = 'none';
-  openModal('paymentModal');
+// ═══════════════════════════════════════════
+function openPM() {
+  const sel=g('pmTenant');
+  sel.innerHTML=tenants.map(t=>`<option value="${t.id}">${t.name} — ${t.apt}</option>`).join('');
+  g('pmAmt').value=''; g('pmDate').value=todayStr();
+  g('pmMonths').value='1'; g('pmNext').value=''; g('pmNote').value='';
+  g('pmErr').classList.remove('on'); afr(); om('pmModal');
 }
+function openPMFor(id){ openPM(); g('pmTenant').value=id; afr(); }
+function afr(){ const t=tenants.find(x=>x.id===g('pmTenant').value); if(t) g('pmAmt').value=t.rent; }
 
-function openPaymentModalForTenant(id) {
-  openPaymentModal();
-  document.getElementById('pTenant').value = id;
-  autoFillRent();
-}
-
-function autoFillRent() {
-  const id = document.getElementById('pTenant').value;
-  const t = tenants.find(x => x.id === id);
-  if (t) document.getElementById('pAmount').value = t.rent;
-}
-
-async function savePayment() {
-  const tenantId = document.getElementById('pTenant').value;
-  const amount = parseFloat(document.getElementById('pAmount').value) || 0;
-  const date = document.getElementById('pDate').value;
-  const months = parseInt(document.getElementById('pMonths').value) || 1;
-  const nextDate = document.getElementById('pNextDate').value;
-  const notes = document.getElementById('pNotes').value.trim();
-  if (!tenantId || !amount) { showErr('pErr', 'Select a tenant and enter an amount.'); return; }
-  const btn = document.getElementById('pSaveBtn');
-  btn.classList.add('btn-loading'); btn.textContent = 'Saving…';
-
-  const { error: pErr } = await supabase.from('payments').insert({
-    tenant_id: tenantId, amount, date: date || null, months,
-    next_date: nextDate || null, notes, logged_by: currentUser.id
-  });
-  if (pErr) { showErr('pErr', pErr.message); btn.classList.remove('btn-loading'); btn.textContent = 'Log Payment'; return; }
-
-  const t = tenants.find(x => x.id === tenantId);
-  if (t) {
-    await supabase.from('tenants').update({
-      amt_paid: (Number(t.amt_paid)||0) + amount,
-      months_paid: (Number(t.months_paid)||0) + months,
-      next_date: nextDate || t.next_date,
-      status: 'paid'
-    }).eq('id', tenantId);
+function savePayment() {
+  const tid=g('pmTenant').value;
+  const amt=parseFloat(g('pmAmt').value)||0;
+  const date=g('pmDate').value;
+  const months=parseInt(g('pmMonths').value)||1;
+  const nextDate=g('pmNext').value||null;
+  const notes=g('pmNote').value.trim();
+  if(!tid||!amt){ g('pmErr').textContent='Select a tenant and enter an amount.'; g('pmErr').classList.add('on'); return; }
+  payments.unshift({id:uid(),tenantId:tid,amount:amt,date,months,nextDate,notes,createdAt:Date.now()});
+  const ti=tenants.findIndex(x=>x.id===tid);
+  if(ti>=0){
+    tenants[ti].amtPaid=(num(tenants[ti].amtPaid)+amt);
+    tenants[ti].monthsPaid=(num(tenants[ti].monthsPaid)+months);
+    if(nextDate) tenants[ti].nextDate=nextDate;
+    tenants[ti].status='paid';
   }
-  btn.classList.remove('btn-loading'); btn.textContent = 'Log Payment';
-  closeModal('paymentModal');
-  await fetchData(); render();
-  showToast('Payment logged ✓', 'success');
+  save(); cm('pmModal'); render(); updateBadges();
+  toast('Payment logged ✓','s');
 }
 
-// ══════════════════════════════════════════
-// UTILS
-// ══════════════════════════════════════════
-function fmtDate(d) {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
-  catch(e) { return d; }
+// ═══════════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════════
+function exportData() {
+  const data=JSON.stringify({tenants,payments,exportedAt:new Date().toISOString()},null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download='renttrack-backup.json'; a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Backup downloaded','s');
+}
+function importData(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(!d.tenants||!d.payments) throw new Error('Invalid backup file.');
+      tenants=d.tenants; payments=d.payments;
+      save(); render(); updateBadges();
+      toast(`Restored ${tenants.length} tenants & ${payments.length} payments`,'s');
+    }catch(err){ toast('Import failed: '+err.message,'e'); }
+    e.target.value='';
+  };
+  r.readAsText(file);
+}
+function confirmClear() {
+  g('cfTitle').textContent='Clear All Data';
+  g('cfMsg').textContent='This will permanently delete ALL tenants and payments. Export a backup first!';
+  g('cfOk').textContent='Clear Everything';
+  g('cfOk').onclick=()=>{
+    tenants=[]; payments=[]; save(); cm('cfModal'); render(); updateBadges();
+    toast('All data cleared','i');
+  };
+  om('cfModal');
 }
 
-function showErr(id, msg) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg; el.style.display = 'block';
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+const g   = id => document.getElementById(id);
+const num = v  => parseFloat(v)||0;
+const now = () => Date.now();
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+function fmtD(d) {
+  if(!d) return '—';
+  try{
+    const dt = typeof d==='number' ? new Date(d) : new Date(d+'T00:00:00');
+    return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }catch(e){return d;}
 }
 
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function showErr(id,msg){ const el=g(id); el.textContent=msg; el.classList.add('on'); }
+function showErr2(id,msg){ const el=g(id); el.textContent=msg; el.style.display='block'; }
 
-function showToast(msg, type='success') {
-  const t = document.getElementById('toast');
-  t.className = 'toast t-' + type;
-  t.innerHTML = (type==='success'?'✓ ':type==='error'?'✗ ':'ℹ ') + msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3200);
+function om(id){ g(id).classList.add('on'); }
+function cm(id){ g(id).classList.remove('on'); }
+
+function toast(msg, type='s') {
+  const t=g('toast');
+  t.className=`toast t${type} on`;
+  t.innerHTML=(type==='s'?'✓ ':type==='e'?'✗ ':'ℹ ')+msg;
+  clearTimeout(t._tm);
+  t._tm=setTimeout(()=>t.classList.remove('on'),3000);
 }
 
-function showSQLHelp() { openModal('sqlModal'); }
-
-function copySQL() {
-  const sql = document.querySelector('#sqlModal pre').textContent;
-  navigator.clipboard.writeText(sql).then(() => showToast('SQL copied!', 'success'));
-}
-
-// Close modals on overlay click
-document.querySelectorAll('.overlay').forEach(el => {
-  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+// ═══════════════════════════════════════════
+// CLOSE MODAL ON BACKDROP
+// ═══════════════════════════════════════════
+document.querySelectorAll('.ov').forEach(el=>{
+  el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('on'); });
 });
 
-// ══════════════════════════════════════════
+// ═══════════════════════════════════════════
 // BOOT
-// ══════════════════════════════════════════
-// Load Supabase JS from CDN, then init
-const supabaseJs = window.supabase;
-initSupabase();
+// ═══════════════════════════════════════════
+load();
+if(session){
+  const u=currentUser();
+  if(u){ launchApp(u); }
+  else { session=null; save(); }
+}
 </script>
 </body>
 </html>
