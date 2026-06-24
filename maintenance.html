@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RentTrack — Under Maintenance</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & ROOT ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #050818;
+  --bg2:      #080d20;
+  --violet:   #7c3aed;
+  --violet2:  #5b21b6;
+  --cyan:     #00f5d4;
+  --cyan2:    #00c9ae;
+  --rose:     #f43f5e;
+  --amber:    #f59e0b;
+  --text:     #f0edf8;
+  --text2:    #a5b4d4;
+  --text3:    #4a5680;
+  --card:     rgba(255,255,255,0.035);
+  --card-b:   rgba(255,255,255,0.07);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── CANVAS BACKGROUND ── */
+#bgCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── GRADIENT ORBS ── */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 12s ease-in-out infinite;
+}
+.orb1 { width: 600px; height: 600px; background: rgba(124,58,237,0.18); top: -200px; left: -100px; animation-delay: 0s; }
+.orb2 { width: 500px; height: 500px; background: rgba(0,245,212,0.10); bottom: -150px; right: -100px; animation-delay: -4s; }
+.orb3 { width: 300px; height: 300px; background: rgba(244,63,94,0.08); top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -8s; }
+
+@keyframes orbFloat {
+  0%,100% { transform: translateY(0px) scale(1); }
+  33%      { transform: translateY(-30px) scale(1.05); }
+  66%      { transform: translateY(20px) scale(0.96); }
+}
+
+/* ── GRID OVERLAY ── */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(124,58,237,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,58,237,0.04) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+}
+
+/* ── LAYOUT ── */
+.page { position: relative; z-index: 1; }
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  position: relative;
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(124,58,237,0.15);
+  border: 1px solid rgba(124,58,237,0.35);
+  border-radius: 100px;
+  padding: 7px 18px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+  margin-bottom: 36px;
+  animation: fadeDown 0.8s ease both;
+}
+.status-pulse {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 0 rgba(245,158,11,0.6);
+  animation: statusPulse 2s ease infinite;
+}
+@keyframes statusPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(245,158,11,0.6); }
+  70%  { box-shadow: 0 0 0 10px rgba(245,158,11,0); }
+  100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
+}
+
+/* Logo */
+.hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 32px;
+  animation: fadeDown 0.8s 0.1s ease both;
+}
+.logo-icon {
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, var(--violet), var(--cyan));
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  box-shadow: 0 0 40px rgba(124,58,237,0.4);
+  animation: iconGlow 3s ease-in-out infinite alternate;
+}
+@keyframes iconGlow {
+  from { box-shadow: 0 0 30px rgba(124,58,237,0.4); }
+  to   { box-shadow: 0 0 60px rgba(124,58,237,0.7), 0 0 100px rgba(0,245,212,0.2); }
+}
+.logo-text-wrap { text-align: left; }
+.logo-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  background: linear-gradient(135deg, #fff 40%, var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo-sub {
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-top: 3px;
+}
+
+/* Headline */
+.hero-headline {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2.8rem, 7vw, 5.5rem);
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin-bottom: 20px;
+  max-width: 800px;
+  animation: fadeDown 0.8s 0.2s ease both;
+}
+.hero-headline em {
+  font-style: italic;
+  background: linear-gradient(135deg, var(--violet), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: clamp(1rem, 2vw, 1.15rem);
+  color: var(--text2);
+  max-width: 540px;
+  line-height: 1.7;
+  margin-bottom: 52px;
+  font-weight: 400;
+  animation: fadeDown 0.8s 0.3s ease both;
+}
+
+/* ── COUNTDOWN ── */
+.countdown-wrap {
+  animation: fadeDown 0.8s 0.4s ease both;
+  margin-bottom: 48px;
+}
+.countdown-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 16px;
+}
+.countdown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cd-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.cd-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+  background: linear-gradient(180deg, #fff, var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  min-width: 90px;
+  text-align: center;
+  background-color: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 16px 10px 12px;
+  position: relative;
+  transition: transform 0.15s;
+}
+.cd-num::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0; right: 0;
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+}
+.cd-lbl {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 600;
+}
+.cd-sep {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2.5rem;
+  color: var(--text3);
+  margin-top: -20px;
+}
+
+/* Date picker row */
+.date-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.date-picker-row label {
+  font-size: 0.72rem;
+  color: var(--text3);
+  letter-spacing: 0.08em;
+}
+.date-picker-row input[type="datetime-local"] {
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.date-picker-row input:focus { border-color: var(--violet); }
+.date-picker-row input::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+.date-picker-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  background: rgba(124,58,237,0.2);
+  border: 1px solid rgba(124,58,237,0.4);
+  color: #c4b5fd;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.date-picker-btn:hover { background: rgba(124,58,237,0.35); }
+
+/* ── EMAIL NOTIFY ── */
+.notify-row {
+  animation: fadeDown 0.8s 0.5s ease both;
+  display: flex;
+  gap: 0;
+  max-width: 420px;
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.03);
+}
+.notify-row input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 13px 18px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.85rem;
+  outline: none;
+}
+.notify-row input::placeholder { color: var(--text3); }
+.notify-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  background: linear-gradient(135deg, var(--violet), #5b21b6);
+  border: none;
+  color: #fff;
+  padding: 13px 22px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.notify-btn:hover { filter: brightness(1.15); }
+.notify-success {
+  font-size: 0.78rem;
+  color: var(--cyan);
+  margin-top: 8px;
+  display: none;
+  animation: fadeDown 0.3s ease;
+}
+
+/* ── SCROLL HINT ── */
+.scroll-hint {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: fadeDown 1s 1s ease both;
+}
+.scroll-hint-txt { font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); }
+.scroll-arrow {
+  width: 20px; height: 20px;
+  border-right: 2px solid var(--text3);
+  border-bottom: 2px solid var(--text3);
+  transform: rotate(45deg);
+  animation: scrollBounce 1.5s ease infinite;
+}
+@keyframes scrollBounce {
+  0%,100% { transform: rotate(45deg) translateY(0); }
+  50%      { transform: rotate(45deg) translateY(5px); }
+}
+
+/* ── DIVIDER ── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 10%;
+  margin: 10px 0;
+}
+.divider-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--text3), transparent); }
+.divider-label { font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text3); white-space: nowrap; }
+
+/* ── FEATURES SECTION ── */
+.features-section {
+  padding: 80px 24px 100px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.features-eyebrow {
+  text-align: center;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-weight: 700;
+  margin-bottom: 14px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.6s ease;
+}
+.features-eyebrow.visible { opacity: 1; transform: translateY(0); }
+.features-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: -0.02em;
+  margin-bottom: 14px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.6s 0.1s ease;
+}
+.features-title.visible { opacity: 1; transform: translateY(0); }
+.features-sub {
+  text-align: center;
+  color: var(--text2);
+  font-size: 1rem;
+  max-width: 520px;
+  margin: 0 auto 60px;
+  line-height: 1.7;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.6s 0.2s ease;
+}
+.features-sub.visible { opacity: 1; transform: translateY(0); }
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.feat-card {
+  background: var(--card);
+  border: 1px solid var(--card-b);
+  border-radius: 18px;
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  opacity: 0;
+  transform: translateY(30px);
+  cursor: default;
+}
+.feat-card.visible { opacity: 1; transform: translateY(0); }
+.feat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, rgba(124,58,237,0.08), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.feat-card:hover { transform: translateY(-6px); border-color: rgba(124,58,237,0.3); }
+.feat-card:hover::before { opacity: 1; }
+.feat-card.accent1:hover { border-color: rgba(0,245,212,0.3); }
+.feat-card.accent1::before { background: radial-gradient(ellipse at top left, rgba(0,245,212,0.08), transparent 60%); }
+.feat-card.accent2:hover { border-color: rgba(244,63,94,0.3); }
+.feat-card.accent2::before { background: radial-gradient(ellipse at top left, rgba(244,63,94,0.08), transparent 60%); }
+.feat-card.accent3:hover { border-color: rgba(245,158,11,0.3); }
+.feat-card.accent3::before { background: radial-gradient(ellipse at top left, rgba(245,158,11,0.08), transparent 60%); }
+
+.feat-icon-wrap {
+  width: 50px; height: 50px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  margin-bottom: 18px;
+}
+.ic-violet { background: rgba(124,58,237,0.2); box-shadow: 0 0 20px rgba(124,58,237,0.2); }
+.ic-cyan   { background: rgba(0,245,212,0.15); box-shadow: 0 0 20px rgba(0,245,212,0.15); }
+.ic-rose   { background: rgba(244,63,94,0.15); box-shadow: 0 0 20px rgba(244,63,94,0.15); }
+.ic-amber  { background: rgba(245,158,11,0.15); box-shadow: 0 0 20px rgba(245,158,11,0.15); }
+.ic-blue   { background: rgba(59,130,246,0.15); box-shadow: 0 0 20px rgba(59,130,246,0.15); }
+.ic-green  { background: rgba(16,185,129,0.15); box-shadow: 0 0 20px rgba(16,185,129,0.15); }
+.ic-purple { background: rgba(168,85,247,0.15); box-shadow: 0 0 20px rgba(168,85,247,0.15); }
+.ic-pink   { background: rgba(236,72,153,0.15); box-shadow: 0 0 20px rgba(236,72,153,0.15); }
+.ic-teal   { background: rgba(20,184,166,0.15); box-shadow: 0 0 20px rgba(20,184,166,0.15); }
+
+.feat-tag {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-bottom: 9px;
+}
+.tag-new    { background: rgba(0,245,212,0.1); color: var(--cyan); border: 1px solid rgba(0,245,212,0.2); }
+.tag-core   { background: rgba(124,58,237,0.1); color: #c4b5fd; border: 1px solid rgba(124,58,237,0.2); }
+.tag-coming { background: rgba(245,158,11,0.1); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+
+.feat-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+.feat-desc {
+  font-size: 0.82rem;
+  color: var(--text2);
+  line-height: 1.65;
+}
+.feat-card.featured {
+  grid-column: span 2;
+  background: linear-gradient(135deg, rgba(124,58,237,0.1), rgba(0,245,212,0.05));
+  border-color: rgba(124,58,237,0.2);
+}
+
+/* ── STATS STRIP ── */
+.stats-strip {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--card-b);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 60px;
+  background: var(--card);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.6s 0.3s ease;
+}
+.stats-strip.visible { opacity: 1; transform: translateY(0); }
+.stat-item {
+  flex: 1;
+  padding: 24px 20px;
+  text-align: center;
+  border-right: 1px solid var(--card-b);
+  position: relative;
+}
+.stat-item:last-child { border-right: none; }
+.stat-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff, var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.stat-desc { font-size: 0.72rem; color: var(--text3); letter-spacing: 0.06em; }
+
+/* ── DEV SECTION ── */
+.dev-section {
+  padding: 20px 24px 100px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.dev-card {
+  background: linear-gradient(135deg, rgba(124,58,237,0.08), rgba(0,245,212,0.04));
+  border: 1px solid rgba(124,58,237,0.2);
+  border-radius: 24px;
+  padding: 44px 48px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.6s ease;
+}
+.dev-card.visible { opacity: 1; transform: translateY(0); }
+.dev-card::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 250px; height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,58,237,0.15), transparent 70%);
+  pointer-events: none;
+}
+.dev-avatar-wrap { flex-shrink: 0; position: relative; }
+.dev-avatar {
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--violet), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  font-weight: 900;
+  font-family: 'Playfair Display', serif;
+  color: #fff;
+  box-shadow: 0 0 40px rgba(124,58,237,0.4);
+  border: 3px solid rgba(255,255,255,0.15);
+}
+.dev-online {
+  position: absolute;
+  bottom: 4px; right: 4px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 3px solid var(--bg2);
+  box-shadow: 0 0 10px var(--cyan);
+  animation: statusPulse 2s ease infinite;
+}
+.dev-info { flex: 1; }
+.dev-role {
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.dev-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #fff, #c4b5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dev-bio {
+  font-size: 0.85rem;
+  color: var(--text2);
+  line-height: 1.7;
+  margin-bottom: 20px;
+  max-width: 480px;
+}
+.dev-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.18s;
+  cursor: pointer;
+}
+.dev-link.email {
+  background: linear-gradient(135deg, var(--violet), #5b21b6);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(124,58,237,0.3);
+}
+.dev-link.email:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,0.45); }
+.dev-link.github {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text2);
+}
+.dev-link.github:hover { border-color: rgba(255,255,255,0.28); color: var(--text); transform: translateY(-2px); }
+.dev-link.bug {
+  background: rgba(244,63,94,0.1);
+  border: 1px solid rgba(244,63,94,0.25);
+  color: #fca5a5;
+}
+.dev-link.bug:hover { background: rgba(244,63,94,0.18); transform: translateY(-2px); }
+
+/* ── FOOTER ── */
+.page-footer {
+  border-top: 1px solid var(--card-b);
+  padding: 28px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--text3);
+}
+.footer-logo {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--violet), var(--cyan));
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+.footer-right { font-size: 0.72rem; color: var(--text3); }
+.footer-right a { color: var(--cyan); text-decoration: none; }
+.footer-right a:hover { text-decoration: underline; }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* flip digit animation */
+.flip { animation: flipNum 0.3s cubic-bezier(0.36,0.07,0.19,0.97) both; }
+@keyframes flipNum {
+  0%   { transform: translateY(-12px); opacity: 0; }
+  100% { transform: translateY(0);     opacity: 1; }
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .feat-card.featured { grid-column: span 2; }
+  .stats-strip { flex-wrap: wrap; }
+  .stat-item { flex: 1 1 calc(50% - 1px); border-bottom: 1px solid var(--card-b); }
+}
+@media (max-width: 640px) {
+  .features-grid { grid-template-columns: 1fr; }
+  .feat-card.featured { grid-column: span 1; }
+  .dev-card { flex-direction: column; text-align: center; padding: 32px 24px; }
+  .dev-links { justify-content: center; }
+  .dev-bio { max-width: 100%; }
+  .page-footer { justify-content: center; text-align: center; }
+  .stat-item { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+<div class="grid-overlay"></div>
+
+<div class="page">
+
+  <!-- ══════════ HERO ══════════ -->
+  <section class="hero">
+
+    <div class="status-badge">
+      <div class="status-pulse"></div>
+      Scheduled Maintenance in Progress
+    </div>
+
+    <div class="hero-logo">
+      <div class="logo-icon">🏠</div>
+      <div class="logo-text-wrap">
+        <div class="logo-name">RentTrack</div>
+        <div class="logo-sub">Property Manager</div>
+      </div>
+    </div>
+
+    <h1 class="hero-headline">
+      We're building<br>something <em>better</em><br>for you.
+    </h1>
+
+    <p class="hero-sub">
+      RentTrack is undergoing scheduled maintenance to roll out exciting new features.
+      We'll be back online shortly — better, faster, and more powerful than ever.
+    </p>
+
+    <!-- Countdown -->
+    <div class="countdown-wrap">
+      <div class="countdown-label">Back online in</div>
+      <div class="countdown">
+        <div class="cd-block">
+          <div class="cd-num" id="cd-days">00</div>
+          <div class="cd-lbl">Days</div>
+        </div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block">
+          <div class="cd-num" id="cd-hours">00</div>
+          <div class="cd-lbl">Hours</div>
+        </div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block">
+          <div class="cd-num" id="cd-mins">00</div>
+          <div class="cd-lbl">Minutes</div>
+        </div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block">
+          <div class="cd-num" id="cd-secs">00</div>
+          <div class="cd-lbl">Seconds</div>
+        </div>
+      </div>
+      <div class="date-picker-row">
+        <label for="targetDate">Set return date:</label>
+        <input type="datetime-local" id="targetDate">
+        <button class="date-picker-btn" onclick="setReturnDate()">Set</button>
+      </div>
+    </div>
+
+    <!-- Notify -->
+    <div class="notify-row">
+      <input type="email" id="notifyEmail" placeholder="Enter your email for updates…">
+      <button class="notify-btn" onclick="handleNotify()">Notify Me</button>
+    </div>
+    <div class="notify-success" id="notifySuccess">✓ You're on the list! We'll email you when we're back.</div>
+
+    <div class="scroll-hint">
+      <div class="scroll-hint-txt">Explore Features</div>
+      <div class="scroll-arrow"></div>
+    </div>
+
+  </section>
+
+  <!-- ══════════ SECTION DIVIDER ══════════ -->
+  <div class="section-divider">
+    <div class="divider-line"></div>
+    <div class="divider-label">What RentTrack does</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ══════════ FEATURES ══════════ -->
+  <section class="features-section">
+
+    <div class="features-eyebrow reveal">Everything you need</div>
+    <h2 class="features-title reveal">One platform. Every property.<br>Zero headaches.</h2>
+    <p class="features-sub reveal">
+      RentTrack is built for property owners who want clarity, not complexity.
+      Track every tenant, every payment, every due date — all in one place.
+    </p>
+
+    <!-- Stats strip -->
+    <div class="stats-strip reveal">
+      <div class="stat-item">
+        <div class="stat-num" data-target="14">0</div>
+        <div class="stat-desc">Tenants tracked</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" data-target="100">0</div>
+        <div class="stat-desc">Payments logged</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" data-target="99">0</div>
+        <div class="stat-desc">% uptime on Firebase</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">∞</div>
+        <div class="stat-desc">Devices, one account</div>
+      </div>
+    </div>
+
+    <!-- Feature cards -->
+    <div class="features-grid">
+
+      <div class="feat-card featured reveal">
+        <div class="feat-icon-wrap ic-violet">🏘️</div>
+        <div class="feat-tag tag-core">Core</div>
+        <div class="feat-name">Tenant Management, Reimagined</div>
+        <div class="feat-desc">Add tenants with rich profiles — name, unit, rent amount, phone, description, status, and notes. Sort by name, rent, due date, total paid, or status. Search instantly. View detailed payment history per tenant with one click.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-cyan">💳</div>
+        <div class="feat-tag tag-core">Core</div>
+        <div class="feat-name">Smart Payment Logging</div>
+        <div class="feat-desc">Log payments in seconds. Auto-calculates the next due date based on months covered. Quick-pick chips for 1, 2, 3, 6, or 12-month extensions. Full payment history with running totals.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-rose">🔔</div>
+        <div class="feat-tag tag-new">New</div>
+        <div class="feat-name">Dual Notification System</div>
+        <div class="feat-desc">Get reminded both ways — in-app banners appear when rent is due or overdue, and browser push notifications fire even when RentTrack isn't open. Never miss a payment again.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-amber">📅</div>
+        <div class="feat-tag tag-new">New</div>
+        <div class="feat-name">Interactive Payment Calendar</div>
+        <div class="feat-desc">Full month-view calendar showing every due date and payment logged. Color-coded overdue, due-soon, and paid days. Click any date for a tenant breakdown popup. Navigate forward and back through months.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-blue">📊</div>
+        <div class="feat-tag tag-core">Core</div>
+        <div class="feat-name">Live Dashboard & Charts</div>
+        <div class="feat-desc">At-a-glance stats — total tenants, paid-up count, monthly expected income, and overdue count. Bar chart of rent by unit group, donut chart of payment status, recent activity feed, and upcoming due dates.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-green">📑</div>
+        <div class="feat-tag tag-new">New</div>
+        <div class="feat-name">Excel Report Generation</div>
+        <div class="feat-desc">Export your data three ways — by tenant (one sheet per tenant, full payment history), by month (all tenants for that month), or a full data export with Tenants + Payments sheets. Downloads instantly.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-purple">☁️</div>
+        <div class="feat-tag tag-core">Core</div>
+        <div class="feat-name">Real-Time Cloud Sync</div>
+        <div class="feat-desc">Powered by Firebase. Every change syncs instantly across every device. Open RentTrack on your phone and laptop at the same time — both update live. No refresh needed, no data loss.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-pink">👥</div>
+        <div class="feat-tag tag-core">Core</div>
+        <div class="feat-name">Multi-User with Roles</div>
+        <div class="feat-desc">Create as many accounts as you need. Assign Admin (full access) or Viewer (read-only) roles. Promote or demote users anytime from the Users page. Each user has their own secure login.</div>
+      </div>
+
+      <div class="feat-card reveal">
+        <div class="feat-icon-wrap ic-teal">⏱️</div>
+        <div class="feat-tag tag-new">New</div>
+        <div class="feat-name">Configurable Auto-Logout</div>
+        <div class="feat-desc">Set your session timeout from 5 to 60 minutes with a simple slider — or disable it entirely. A 60-second warning appears before logout so you can stay logged in with one click. Keeps your data secure.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ DEV SECTION ══════════ -->
+  <div class="section-divider">
+    <div class="divider-line"></div>
+    <div class="divider-label">Behind RentTrack</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <section class="dev-section">
+    <div class="dev-card reveal">
+      <div class="dev-avatar-wrap">
+        <div class="dev-avatar">PK</div>
+        <div class="dev-online"></div>
+      </div>
+      <div class="dev-info">
+        <div class="dev-role">Lead Developer & Designer</div>
+        <div class="dev-name">Priyash Kafle</div>
+        <div class="dev-bio">
+          Building RentTrack to make property management accessible, modern, and stress-free.
+          Passionate about clean UX, real-time web apps, and tools that actually save people time.
+          Got a feature idea or found a bug? I'd love to hear from you.
+        </div>
+        <div class="dev-links">
+          <a class="dev-link email" href="mailto:priyash504@gmail.com">
+            ✉️ priyash504@gmail.com
+          </a>
+          <a class="dev-link github" href="https://github.com/developermoose99" target="_blank" rel="noopener">
+            🐙 developermoose99
+          </a>
+          <a class="dev-link bug" href="mailto:priyash504@gmail.com?subject=RentTrack Bug Report">
+            🐛 Report a Bug
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ FOOTER ══════════ -->
+  <footer class="page-footer">
+    <div class="footer-left">
+      <div class="footer-logo">🏠</div>
+      <span>RentTrack v2.0 · © 2025 Priyash Kafle · All rights reserved</span>
+    </div>
+    <div class="footer-right">
+      Questions? <a href="mailto:priyash504@gmail.com">priyash504@gmail.com</a>
+    </div>
+  </footer>
+
+</div><!-- /.page -->
+
+<script>
+// ══════════════════════════════════
+// CANVAS PARTICLE SYSTEM
+// ══════════════════════════════════
+const canvas = document.getElementById('bgCanvas');
+const ctx    = canvas.getContext('2d');
+let W, H, particles = [];
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); initParticles(); });
+
+const ICONS = ['🏠','🏡','🏘','🏗','🔑','💰','📋','📊'];
+
+class Particle {
+  constructor() { this.reset(true); }
+  reset(initial) {
+    this.x    = Math.random() * W;
+    this.y    = initial ? Math.random() * H : H + 30;
+    this.size = Math.random() * 14 + 8;
+    this.vy   = -(Math.random() * 0.4 + 0.1);
+    this.vx   = (Math.random() - 0.5) * 0.3;
+    this.alpha= Math.random() * 0.18 + 0.04;
+    this.icon = ICONS[Math.floor(Math.random() * ICONS.length)];
+    this.rot  = Math.random() * Math.PI * 2;
+    this.vrot = (Math.random() - 0.5) * 0.008;
+    this.life = 0;
+    this.maxLife = Math.random() * 400 + 200;
+  }
+  update() {
+    this.x   += this.vx;
+    this.y   += this.vy;
+    this.rot += this.vrot;
+    this.life++;
+    if (this.y < -40 || this.life > this.maxLife) this.reset(false);
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.font = `${this.size}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.icon, 0, 0);
+    ctx.restore();
+  }
+}
+
+function initParticles() {
+  particles = Array.from({ length: 40 }, () => new Particle());
+}
+initParticles();
+
+// Mouse parallax
+let mouseX = W/2, mouseY = H/2;
+document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+
+function animLoop() {
+  ctx.clearRect(0, 0, W, H);
+  // subtle connection lines between nearby particles
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i+1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 120) {
+        ctx.save();
+        ctx.globalAlpha = (1 - dist/120) * 0.04;
+        ctx.strokeStyle = '#7c3aed';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    particles[i].update();
+    particles[i].draw();
+  }
+  requestAnimationFrame(animLoop);
+}
+animLoop();
+
+// ══════════════════════════════════
+// COUNTDOWN TIMER
+// ══════════════════════════════════
+const STORAGE_KEY = 'rt_maintenance_target';
+
+// Default: 3 days from now
+function defaultTarget() {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return d;
+}
+
+let targetDate = (() => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    const d = new Date(saved);
+    if (d > new Date()) return d;
+  }
+  return defaultTarget();
+})();
+
+// Prefill input
+const dtInput = document.getElementById('targetDate');
+const pad = n => String(n).padStart(2,'0');
+function toLocalInput(d) {
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+dtInput.value = toLocalInput(targetDate);
+
+function setReturnDate() {
+  const val = dtInput.value;
+  if (!val) return;
+  const d = new Date(val);
+  if (isNaN(d)) return;
+  targetDate = d;
+  localStorage.setItem(STORAGE_KEY, d.toISOString());
+}
+
+let prevVals = {};
+function updateCountdown() {
+  const now  = new Date();
+  const diff = Math.max(0, targetDate - now);
+  const days  = Math.floor(diff / 864e5);
+  const hours = Math.floor((diff % 864e5) / 36e5);
+  const mins  = Math.floor((diff % 36e5) / 6e4);
+  const secs  = Math.floor((diff % 6e4) / 1e3);
+
+  const vals = { days, hours, mins, secs };
+  const ids  = { days:'cd-days', hours:'cd-hours', mins:'cd-mins', secs:'cd-secs' };
+
+  for (const [key, id] of Object.entries(ids)) {
+    const el = document.getElementById(id);
+    const v  = String(vals[key]).padStart(2,'0');
+    if (v !== prevVals[key]) {
+      el.textContent = v;
+      el.classList.remove('flip');
+      void el.offsetWidth; // reflow
+      el.classList.add('flip');
+      prevVals[key] = v;
+    }
+  }
+
+  if (diff === 0) {
+    document.querySelector('.countdown-label').textContent = "🎉 We're back online!";
+  }
+}
+updateCountdown();
+setInterval(updateCountdown, 1000);
+
+// ══════════════════════════════════
+// NOTIFY ME
+// ══════════════════════════════════
+function handleNotify() {
+  const input = document.getElementById('notifyEmail');
+  const email = input.value.trim();
+  const ok    = document.getElementById('notifySuccess');
+  if (!email || !email.includes('@')) {
+    input.style.borderBottom = '2px solid var(--rose)';
+    setTimeout(() => input.style.borderBottom = '', 1500);
+    return;
+  }
+  ok.style.display = 'block';
+  input.value = '';
+  input.placeholder = 'Thanks! We\'ll be in touch.';
+}
+
+// ══════════════════════════════════
+// SCROLL REVEAL
+// ══════════════════════════════════
+const revealEls = document.querySelectorAll('.reveal');
+const io = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      // stagger cards in the same grid
+      const delay = entry.target.closest('.features-grid')
+        ? [...entry.target.parentNode.children].indexOf(entry.target) * 80
+        : 0;
+      setTimeout(() => entry.target.classList.add('visible'), delay);
+      io.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+revealEls.forEach(el => io.observe(el));
+
+// ══════════════════════════════════
+// ANIMATED STAT COUNTERS
+// ══════════════════════════════════
+const statNums = document.querySelectorAll('.stat-num[data-target]');
+const statsIo  = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const el     = entry.target;
+      const target = parseInt(el.dataset.target);
+      let cur = 0;
+      const step = Math.ceil(target / 40);
+      const timer = setInterval(() => {
+        cur = Math.min(cur + step, target);
+        el.textContent = cur + (el.dataset.target === '99' ? '%' : '');
+        if (cur >= target) clearInterval(timer);
+      }, 35);
+      statsIo.unobserve(el);
+    }
+  });
+}, { threshold: 0.5 });
+statNums.forEach(el => statsIo.observe(el));
+
+// ══════════════════════════════════
+// MOUSE TILT on feat cards
+// ══════════════════════════════════
+document.querySelectorAll('.feat-card').forEach(card => {
+  card.addEventListener('mousemove', e => {
+    const rect = card.getBoundingClientRect();
+    const cx   = rect.left + rect.width  / 2;
+    const cy   = rect.top  + rect.height / 2;
+    const rx   = ((e.clientY - cy) / rect.height) * 6;
+    const ry   = -((e.clientX - cx) / rect.width)  * 6;
+    card.style.transform = `perspective(600px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-6px)`;
+  });
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = '';
+  });
+});
+
+// ══════════════════════════════════
+// TYPEWRITER EFFECT on headline EM
+// ══════════════════════════════════
+const emEl   = document.querySelector('.hero-headline em');
+const words  = ['better.', 'smarter.', 'faster.', 'for you.'];
+let wIdx = 0, cIdx = 0, deleting = false;
+
+function typeWriter() {
+  const word = words[wIdx];
+  if (!deleting) {
+    emEl.textContent = word.slice(0, ++cIdx);
+    if (cIdx === word.length) { deleting = true; setTimeout(typeWriter, 1800); return; }
+  } else {
+    emEl.textContent = word.slice(0, --cIdx);
+    if (cIdx === 0) { deleting = false; wIdx = (wIdx + 1) % words.length; }
+  }
+  setTimeout(typeWriter, deleting ? 55 : 95);
+}
+// Start after page load animation settles
+setTimeout(typeWriter, 1800);
+</script>
+</body>
+</html>
