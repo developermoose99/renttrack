@@ -1,0 +1,2766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RentTrack</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- ── PASTE YOUR FIREBASE CONFIG HERE ── -->
+<script type="module">
+import { initializeApp }                          from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword,
+         signInWithEmailAndPassword, signOut,
+         onAuthStateChanged, updatePassword }     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, doc, addDoc,
+         setDoc, getDoc, getDocs, deleteDoc,
+         updateDoc, onSnapshot, query,
+         orderBy, serverTimestamp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// ╔══════════════════════════════════════════╗
+// ║   PASTE YOUR FIREBASE CONFIG BELOW       ║
+// ║   (replace the placeholder values)       ║
+// ╚══════════════════════════════════════════╝
+const firebaseConfig = {
+  apiKey:            "AIzaSyAhX3FbPItOmFVzjvEOzykkmP_bDf-9NVk",
+  authDomain:        "renttrack-b6a5c.firebaseapp.com",
+  projectId:         "renttrack-b6a5c",
+  storageBucket:     "renttrack-b6a5c.firebasestorage.app",
+  messagingSenderId: "442657388680",
+  appId:             "1:442657388680:web:adcc930ca72d2057ac873d"
+};
+
+// ═══════════════════════════════════════════
+// INIT FIREBASE
+// ═══════════════════════════════════════════
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let currentUser    = null;
+let currentProfile = null;
+let tenants        = [];
+let payments       = [];
+let view           = 'dashboard';
+let filter         = 'all';
+let unsubTenants   = null;
+let unsubPayments  = null;
+
+// ── SETTINGS STATE (persisted in localStorage) ──
+let appSettings = {
+  inactivityTimeout: 15,   // minutes (0 = disabled)
+  theme: 'dark',            // 'dark' | 'light'
+};
+function loadSettings() {
+  try { const s = JSON.parse(localStorage.getItem('rt_settings')||'null'); if(s) appSettings={...appSettings,...s}; } catch(e){}
+}
+function saveSettings() {
+  localStorage.setItem('rt_settings', JSON.stringify(appSettings));
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+const g      = id  => document.getElementById(id);
+const num    = v   => parseFloat(v) || 0;
+const uid    = ()  => Math.random().toString(36).slice(2,11) + Date.now().toString(36);
+const today  = ()  => new Date().toISOString().split('T')[0];
+
+function fmtD(d) {
+  if (!d) return '—';
+  try {
+    const dt = d?.toDate ? d.toDate() : new Date(typeof d==='string' ? d+'T00:00:00' : d);
+    return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  } catch(e) { return String(d); }
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    const dt = ts?.toDate ? ts.toDate() : new Date(ts);
+    return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  } catch(e) { return '—'; }
+}
+
+const initials = n => (n||'?').split(' ').map(p=>p[0]||'').join('').toUpperCase().slice(0,2);
+
+function toast(msg, type='s') {
+  const t = g('toast');
+  t.className = `toast t${type} on`;
+  t.innerHTML = (type==='s'?'✓ ':type==='e'?'✗ ':'ℹ ') + msg;
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove('on'), 3200);
+}
+
+function setSyncStatus(state) {
+  const dot = g('syncDot');
+  const lbl = g('syncLbl');
+  if (!dot || !lbl) return;
+  dot.className = 'sdot' + (state==='syncing'?' spin':state==='error'?' err':'');
+  lbl.textContent = state==='syncing'?'Syncing…':state==='error'?'Error':'Live';
+}
+
+function om(id) { g(id).classList.add('on'); }
+function cm(id) { g(id).classList.remove('on'); }
+
+function showErrEl(id, msg) {
+  const el = g(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('on');
+}
+
+function clearErr(id) {
+  const el = g(id);
+  if (el) el.classList.remove('on');
+}
+
+// ═══════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════
+function authTab(t) {
+  g('vSignin').style.display = t==='signin' ? 'block' : 'none';
+  g('vSignup').style.display = t==='signup' ? 'block' : 'none';
+  // Update tab active classes
+  const tabs = document.querySelectorAll('.auth-tab');
+  tabs.forEach(el => el.classList.remove('on'));
+  const activeTab = t==='signin' ? document.querySelector('#authTabs .auth-tab:first-of-type') : document.querySelector('#authTabs .auth-tab:last-of-type');
+  if (activeTab) activeTab.classList.add('on');
+  // Animate slider
+  const slider = g('authTabSlider');
+  const tabsWrap = g('authTabs');
+  if (slider && tabsWrap) {
+    const tabEls = tabsWrap.querySelectorAll('.auth-tab');
+    const idx    = t==='signin' ? 0 : 1;
+    const tw     = tabsWrap.offsetWidth - 6;
+    slider.style.width = (tw/2) + 'px';
+    slider.style.left  = (3 + idx*(tw/2)) + 'px';
+  }
+}
+window.authTab = authTab;
+
+// ═══════════════════════════════════════════
+// SPECTACULAR LOADING SCREEN
+// ═══════════════════════════════════════════
+function showLoadingScreen(name) {
+  const ls = g('loadingScreen');
+  ls.style.display = 'flex';
+  ls.style.opacity = '0';
+  ls.style.transition = 'opacity 0.4s ease';
+  requestAnimationFrame(() => { ls.style.opacity = '1'; });
+
+  // Start load canvas particle burst
+  startLoadCanvas();
+
+  // Animate progress ring
+  const prog = g('lsProgress');
+  const circ = 2 * Math.PI * 52;
+  prog.style.strokeDasharray = circ;
+  prog.style.strokeDashoffset = circ;
+
+  const steps = ['lst0','lst1','lst2','lst3'];
+  let stepIdx = 0;
+
+  function activateStep(i) {
+    if (i >= steps.length) return;
+    const el = g(steps[i]);
+    if (el) el.classList.add('active');
+    const pct = (i + 1) / steps.length;
+    prog.style.strokeDashoffset = circ * (1 - pct);
+  }
+
+  // Animate steps with delays
+  activateStep(0);
+  setTimeout(() => activateStep(1), 500);
+  setTimeout(() => activateStep(2), 950);
+  setTimeout(() => activateStep(3), 1350);
+
+  // Icon morph sequence
+  const icons = ['🔐','⚡','🏠'];
+  let iIdx = 0;
+  const iconEl = g('lsIcon');
+  const iconTimer = setInterval(() => {
+    iIdx++;
+    if (iIdx < icons.length) {
+      iconEl.style.transform = 'scale(0)';
+      setTimeout(() => {
+        iconEl.textContent = icons[iIdx];
+        iconEl.style.transform = 'scale(1)';
+      }, 200);
+    } else { clearInterval(iconTimer); }
+  }, 500);
+
+  // Welcome reveal
+  setTimeout(() => {
+    prog.style.strokeDashoffset = '0';
+    g('lsTitle').style.opacity = '0';
+    setTimeout(() => {
+      g('lsTitle').style.display = 'none';
+      g('lsSteps').style.display = 'none';
+      const wc = g('lsWelcome');
+      wc.style.display = 'block';
+      g('lsWelcomeName').textContent = `Welcome, ${name}!`;
+      wc.style.animation = 'lsWelcomeIn 0.6s cubic-bezier(.22,1,.36,1) both';
+      // Trigger burst!
+      triggerBurst();
+    }, 300);
+  }, 1800);
+}
+
+function hideLoadingScreen() {
+  const ls = g('loadingScreen');
+  ls.style.opacity = '0';
+  setTimeout(() => {
+    ls.style.display = 'none';
+    // Reset state for next time
+    g('lsTitle').style.display = '';
+    g('lsTitle').style.opacity = '1';
+    g('lsSteps').style.display = '';
+    g('lsWelcome').style.display = 'none';
+    g('lsIcon').textContent = '🏠';
+    g('lsIcon').style.transform = 'scale(1)';
+    ['lst0','lst1','lst2','lst3'].forEach(id => g(id)?.classList.remove('active'));
+    stopLoadCanvas();
+  }, 400);
+}
+
+// Load canvas — shooting stars
+let _loadCanvas, _loadCtx, _loadStars = [], _loadRAF;
+function startLoadCanvas() {
+  _loadCanvas = g('loadCanvas');
+  if (!_loadCanvas) return;
+  _loadCtx = _loadCanvas.getContext('2d');
+  _loadCanvas.width = window.innerWidth;
+  _loadCanvas.height = window.innerHeight;
+  _loadStars = Array.from({length: 60}, () => makeLoadStar());
+  function loop() {
+    _loadCtx.clearRect(0,0,_loadCanvas.width,_loadCanvas.height);
+    _loadStars.forEach(s => {
+      s.x += s.vx; s.y += s.vy; s.life++;
+      s.alpha = Math.sin(s.life / s.maxLife * Math.PI) * s.maxAlpha;
+      if (s.life > s.maxLife) Object.assign(s, makeLoadStar());
+      _loadCtx.save();
+      _loadCtx.globalAlpha = s.alpha;
+      _loadCtx.fillStyle = s.color;
+      _loadCtx.shadowBlur = 12;
+      _loadCtx.shadowColor = s.color;
+      _loadCtx.beginPath();
+      _loadCtx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      _loadCtx.fill();
+      _loadCtx.restore();
+    });
+    _loadRAF = requestAnimationFrame(loop);
+  }
+  loop();
+}
+function makeLoadStar() {
+  const W = window.innerWidth, H = window.innerHeight;
+  const colors = ['#4f8eff','#00e5a0','#a855f7','#ffd32a','#ff4757','#00f5d4'];
+  return {
+    x: Math.random()*W, y: Math.random()*H,
+    vx: (Math.random()-.5)*1.5, vy: (Math.random()-.5)*1.5,
+    r: Math.random()*2+0.5,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    alpha: 0, maxAlpha: Math.random()*0.6+0.1,
+    life: Math.random()*60, maxLife: Math.random()*80+60
+  };
+}
+function stopLoadCanvas() { cancelAnimationFrame(_loadRAF); }
+
+// Burst confetti on welcome
+function triggerBurst() {
+  const wrap = g('lsBurst');
+  wrap.innerHTML = '';
+  const colors = ['#4f8eff','#00e5a0','#a855f7','#ffd32a','#ff4757','#f59e0b','#00f5d4'];
+  const cx = window.innerWidth/2, cy = window.innerHeight/2;
+  for (let i=0; i<80; i++) {
+    const el = document.createElement('div');
+    el.className = 'burst-p';
+    const angle = (i/80)*360;
+    const dist  = 150 + Math.random()*200;
+    const tx    = Math.cos(angle*Math.PI/180)*dist;
+    const ty    = Math.sin(angle*Math.PI/180)*dist;
+    const size  = Math.random()*8+4;
+    el.style.cssText = `
+      left:${cx}px;top:${cy}px;
+      width:${size}px;height:${size * (Math.random()<0.5?1:3)}px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      border-radius:${Math.random()<0.5?'50%':'2px'};
+      --tx:${tx}px;--ty:${ty}px;
+      animation-delay:${Math.random()*200}ms;
+      animation-duration:${800+Math.random()*600}ms;`;
+    wrap.appendChild(el);
+  }
+}
+
+async function doSignin() {
+  const email = g('siEmail').value.trim();
+  const pass  = g('siPass').value;
+  clearErr('siErr');
+  if (!email || !pass) { showErrEl('siErr','Email and password required.'); shakeCard(); return; }
+  const btn = g('siBtn');
+  btn.classList.add('auth-btn-loading');
+  g('auth').style.pointerEvents = 'none';
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    const snap = await getDoc(doc(db,'profiles', cred.user.uid));
+    const name = snap.exists() ? snap.data().name : email.split('@')[0];
+    // Transition: slide auth out, show loader
+    g('auth').style.transform = 'scale(0.97)';
+    g('auth').style.opacity   = '0';
+    g('auth').style.transition = 'all 0.4s ease';
+    setTimeout(() => { g('auth').style.display = 'none'; }, 400);
+    showLoadingScreen(name);
+  } catch(e) {
+    showErrEl('siErr', friendlyAuthError(e.code));
+    btn.classList.remove('auth-btn-loading');
+    g('auth').style.pointerEvents = '';
+    shakeCard();
+  }
+}
+window.doSignin = doSignin;
+
+async function doSignup() {
+  const name  = g('suName').value.trim();
+  const email = g('suEmail').value.trim();
+  const pass  = g('suPass').value;
+  const role  = g('suRole').value;
+  clearErr('suErr');
+  if (!name||!email||!pass) { showErrEl('suErr','All fields required.'); shakeCard(); return; }
+  if (pass.length < 6)      { showErrEl('suErr','Password must be 6+ characters.'); shakeCard(); return; }
+  const btn = g('suBtn');
+  btn.classList.add('auth-btn-loading');
+  g('auth').style.pointerEvents = 'none';
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await setDoc(doc(db,'profiles', cred.user.uid), { name, email, role, createdAt: serverTimestamp() });
+    g('auth').style.transform = 'scale(0.97)';
+    g('auth').style.opacity   = '0';
+    g('auth').style.transition = 'all 0.4s ease';
+    setTimeout(() => { g('auth').style.display = 'none'; }, 400);
+    showLoadingScreen(name);
+  } catch(e) {
+    showErrEl('suErr', friendlyAuthError(e.code));
+    btn.classList.remove('auth-btn-loading');
+    g('auth').style.pointerEvents = '';
+    shakeCard();
+  }
+}
+window.doSignup = doSignup;
+
+function shakeCard() {
+  const card = g('authCard');
+  card.classList.remove('shake');
+  void card.offsetWidth;
+  card.classList.add('shake');
+}
+window.shakeCard = shakeCard;
+
+function togglePass(inputId, btn) {
+  const inp = g(inputId);
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else                         { inp.type = 'password'; btn.textContent = '👁'; }
+}
+window.togglePass = togglePass;
+
+function validateAuthInput(id) {
+  const inp = g(id);
+  const check = g(id + 'Check');
+  if (!check) return;
+  const valid = inp.value.includes('@') && inp.value.includes('.');
+  check.textContent = valid ? '✓' : '';
+  check.style.color = valid ? 'var(--grn)' : '';
+  inp.style.borderColor = inp.value.length > 3 ? (valid ? 'var(--grn)' : 'var(--border)') : '';
+}
+window.validateAuthInput = validateAuthInput;
+
+// Password strength meter
+function checkPwStrength(pass) {
+  let score = 0;
+  if (pass.length >= 8) score++;
+  if (/[A-Z]/.test(pass)) score++;
+  if (/[0-9]/.test(pass)) score++;
+  if (/[^A-Za-z0-9]/.test(pass)) score++;
+  return score;
+}
+
+
+async function doSignout() {
+  stopActivityTracking();
+  unsubTenants?.(); unsubPayments?.();
+  await signOut(auth);
+  tenants = []; payments = []; currentUser = null; currentProfile = null;
+  const wb = document.getElementById('welcomeBanner');
+  if (wb) wb.remove();
+  g('app').style.display  = 'none';
+  // Reset auth panel
+  const authEl = g('auth');
+  authEl.style.display    = 'block';
+  authEl.style.opacity    = '1';
+  authEl.style.transform  = 'none';
+  authEl.style.transition = 'none';
+  authEl.style.pointerEvents = '';
+  g('siEmail').value = ''; g('siPass').value = '';
+  clearErr('siErr'); authTab('signin');
+}
+window.doSignout = doSignout;
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/user-not-found':       'No account found with this email.',
+    'auth/wrong-password':       'Incorrect password.',
+    'auth/invalid-email':        'Invalid email address.',
+    'auth/email-already-in-use': 'An account with this email already exists.',
+    'auth/weak-password':        'Password must be at least 6 characters.',
+    'auth/invalid-credential':   'Incorrect email or password.',
+    'auth/too-many-requests':    'Too many attempts. Please wait and try again.',
+    'auth/network-request-failed': 'Network error. Check your connection.',
+  };
+  return map[code] || 'Something went wrong. Please try again.';
+}
+
+// ═══════════════════════════════════════════
+// AUTH STATE LISTENER
+// ═══════════════════════════════════════════
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    currentUser = user;
+    const snap  = await getDoc(doc(db, 'profiles', user.uid));
+    currentProfile = snap.exists() ? snap.data() : { name: user.email, role: 'viewer', email: user.email };
+    launchApp();
+  } else {
+    g('auth').style.display = 'flex';
+    g('app').style.display  = 'none';
+  }
+});
+
+// ═══════════════════════════════════════════
+// APP LAUNCH
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// AUTO-LOGOUT (inactivity timer)
+// ═══════════════════════════════════════════
+let _inactivityTimer = null;
+const ACTIVITY_EVENTS = ['mousemove','mousedown','keydown','touchstart','scroll','click'];
+
+function resetInactivityTimer() {
+  clearTimeout(_inactivityTimer);
+  const mins = parseInt(appSettings.inactivityTimeout) || 0;
+  if (!mins || mins <= 0) return; // disabled
+  _inactivityTimer = setTimeout(() => {
+    if (!currentUser) return;
+    showInactivityWarning();
+  }, (mins - 1) * 60 * 1000); // warn 1 min before
+}
+
+let _finalLogoutTimer = null;
+function showInactivityWarning() {
+  clearTimeout(_finalLogoutTimer);
+  // Show a toast-style warning with countdown
+  const warn = document.createElement('div');
+  warn.id = 'inactivityWarn';
+  warn.innerHTML = `
+    <div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9998;
+      background:#1c2235;border:1px solid #ff4757;border-radius:12px;padding:16px 22px;
+      box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;align-items:center;gap:14px;min-width:320px">
+      <div style="font-size:1.4rem">⏱️</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:.84rem;color:#f0edf8">Session expiring</div>
+        <div style="font-size:.74rem;color:#8892b0;margin-top:2px">You'll be logged out in <strong id="inactCountdown">60</strong>s due to inactivity</div>
+      </div>
+      <button onclick="dismissInactivityWarn()" style="font-family:'Space Grotesk',sans-serif;
+        background:rgba(79,142,255,.15);border:1px solid rgba(79,142,255,.3);color:#4f8eff;
+        padding:7px 14px;border-radius:7px;font-size:.75rem;font-weight:600;cursor:pointer">
+        Stay Logged In
+      </button>
+    </div>`;
+  document.body.appendChild(warn);
+
+  let secs = 60;
+  const tick = setInterval(() => {
+    secs--;
+    const el = document.getElementById('inactCountdown');
+    if (el) el.textContent = secs;
+    if (secs <= 0) {
+      clearInterval(tick);
+      doSignout();
+      const w = document.getElementById('inactivityWarn');
+      if (w) w.remove();
+    }
+  }, 1000);
+  warn._tick = tick;
+
+  _finalLogoutTimer = setTimeout(() => {
+    clearInterval(tick);
+    doSignout();
+    warn.remove();
+  }, 61000);
+}
+
+function dismissInactivityWarn() {
+  const w = document.getElementById('inactivityWarn');
+  if (w) { clearInterval(w._tick); w.remove(); }
+  clearTimeout(_finalLogoutTimer);
+  resetInactivityTimer();
+}
+window.dismissInactivityWarn = dismissInactivityWarn;
+
+function startActivityTracking() {
+  ACTIVITY_EVENTS.forEach(e => document.addEventListener(e, resetInactivityTimer, { passive: true }));
+  resetInactivityTimer();
+}
+
+function stopActivityTracking() {
+  ACTIVITY_EVENTS.forEach(e => document.removeEventListener(e, resetInactivityTimer));
+  clearTimeout(_inactivityTimer);
+  clearTimeout(_finalLogoutTimer);
+}
+
+// ═══════════════════════════════════════════
+// THEME SYSTEM
+// ═══════════════════════════════════════════
+function applyTheme(theme) {
+  appSettings.theme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  saveSettings();
+  // update toggle button if visible
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.innerHTML = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+}
+
+function toggleTheme() {
+  applyTheme(appSettings.theme === 'dark' ? 'light' : 'dark');
+}
+window.toggleTheme = toggleTheme;
+
+function launchApp() {
+  loadSettings();
+  applyTheme(appSettings.theme);
+  const name = currentProfile?.name || currentUser?.email || 'User';
+  g('uname').textContent = name;
+  g('uav').textContent   = initials(name);
+
+  // If loading screen is showing, give it a moment to display welcome, then transition
+  const ls = g('loadingScreen');
+  if (ls && ls.style.display !== 'none') {
+    setTimeout(() => {
+      // Explosion-to-app transition
+      ls.style.transform = 'scale(1.05)';
+      ls.style.opacity   = '0';
+      ls.style.transition = 'all 0.5s cubic-bezier(.4,0,.2,1)';
+      setTimeout(() => {
+        hideLoadingScreen();
+        g('auth').style.display  = 'none';
+        g('app').style.display   = 'block';
+        g('app').style.opacity   = '0';
+        g('app').style.transform = 'scale(0.98) translateY(8px)';
+        g('app').style.transition = 'all 0.5s cubic-bezier(.22,1,.36,1)';
+        requestAnimationFrame(() => {
+          g('app').style.opacity   = '1';
+          g('app').style.transform = 'scale(1) translateY(0)';
+        });
+      }, 500);
+    }, 900); // Let welcome message show for 0.9s
+  } else {
+    g('auth').style.display = 'none';
+    g('app').style.display  = 'block';
+  }
+
+  subscribeData();
+  gv('dashboard');
+  requestNotifyPermission();
+  startActivityTracking();
+  showWelcomeBanner();
+}
+
+// ═══════════════════════════════════════════
+// WELCOME BANNER (shown once after login)
+// ═══════════════════════════════════════════
+function showWelcomeBanner() {
+  // Only show once per session
+  if (sessionStorage.getItem('rt_welcomed')) return;
+  sessionStorage.setItem('rt_welcomed', '1');
+
+  const banner = document.createElement('div');
+  banner.id = 'welcomeBanner';
+  banner.innerHTML = `
+    <div class="wb-inner">
+      <div class="wb-left">
+        <div class="wb-icon">🏠</div>
+        <div>
+          <div class="wb-title">Welcome to RentTrack</div>
+          <div class="wb-desc">Your all-in-one <strong>Tenant Management Software</strong> — track payments, manage tenants, get notified when rent is due, and export reports instantly.</div>
+          <div class="wb-links">
+            <span>💡 Request a feature or report a bug:</span>
+            <a href="mailto:priyash504@gmail.com" class="wb-email">priyash504@gmail.com</a>
+          </div>
+        </div>
+      </div>
+      <button class="wb-close" onclick="closeWelcomeBanner()">✕ Dismiss</button>
+    </div>`;
+  // Insert after topbar
+  const topbar = document.querySelector('.topbar');
+  if (topbar) topbar.insertAdjacentElement('afterend', banner);
+}
+
+function closeWelcomeBanner() {
+  const b = document.getElementById('welcomeBanner');
+  if (b) { b.style.animation = 'slideUp .3s ease forwards'; setTimeout(() => b.remove(), 300); }
+}
+window.closeWelcomeBanner = closeWelcomeBanner;
+
+// ═══════════════════════════════════════════
+// REAL-TIME DATA LISTENERS
+// ═══════════════════════════════════════════
+function subscribeData() {
+  setSyncStatus('syncing');
+
+  unsubTenants = onSnapshot(
+    query(collection(db,'tenants'), orderBy('createdAt','desc')),
+    snap => {
+      tenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateBadges();
+      render();
+      renderDueBanner();
+      checkDueNotifications();
+      setSyncStatus('live');
+    },
+    err => { console.error(err); setSyncStatus('error'); toast('Sync error: '+err.message,'e'); }
+  );
+
+  unsubPayments = onSnapshot(
+    query(collection(db,'payments'), orderBy('createdAt','desc')),
+    snap => {
+      payments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateBadges();
+      render();
+    },
+    err => { console.error(err); }
+  );
+}
+
+// ═══════════════════════════════════════════
+// RENT-DUE NOTIFICATIONS
+// ═══════════════════════════════════════════
+const DUE_SOON_DAYS = 3; // flag tenants due within this many days
+
+function dueStatusList() {
+  const todayMs = Date.now();
+  return tenants
+    .filter(t => t.nextDate)
+    .map(t => ({ ...t, _diff: Math.ceil((new Date(t.nextDate)-todayMs)/864e5) }))
+    .filter(t => t._diff <= DUE_SOON_DAYS) // overdue or due soon
+    .sort((a,b) => a._diff - b._diff);
+}
+
+function renderDueBanner() {
+  const due = dueStatusList();
+  let el = g('dueBanner');
+  if (!due.length) { if (el) el.remove(); return; }
+
+  const overdue = due.filter(t=>t._diff<0).length;
+  const soon    = due.filter(t=>t._diff>=0).length;
+
+  const html = `
+    <div class="due-banner" id="dueBanner">
+      <div class="db-icon">🔔</div>
+      <div class="db-text">
+        <strong>${due.length} tenant${due.length>1?'s':''}</strong> ${overdue?`<span style="color:var(--red)">${overdue} overdue</span>`:''}${overdue&&soon?' · ':''}${soon?`<span style="color:var(--ylw)">${soon} due within ${DUE_SOON_DAYS} days</span>`:''}
+      </div>
+      <button class="btn btn-ghost btn-xs" onclick="fv('due');dismissBanner()">View</button>
+      <button class="xbtn" onclick="dismissBanner()" style="margin-left:4px">✕</button>
+    </div>`;
+
+  if (el) { el.outerHTML = html; }
+  else {
+    const topbar = document.querySelector('.topbar');
+    topbar.insertAdjacentHTML('afterend', html);
+  }
+}
+window.renderDueBanner = renderDueBanner;
+
+function dismissBanner() {
+  const el = g('dueBanner');
+  if (el) el.style.display = 'none';
+}
+window.dismissBanner = dismissBanner;
+
+// Browser push notification permission + firing
+function requestNotifyPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    // Ask after a short delay so it doesn't feel jarring on load
+    setTimeout(() => { Notification.requestPermission(); }, 1500);
+  }
+}
+
+let _lastNotifiedKey = null;
+function checkDueNotifications() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const due = dueStatusList();
+  if (!due.length) return;
+
+  // Avoid re-notifying every snapshot tick — only notify once per session per data signature
+  const key = due.map(t=>t.id+':'+t._diff).join('|');
+  if (key === _lastNotifiedKey) return;
+  _lastNotifiedKey = key;
+
+  const overdue = due.filter(t=>t._diff<0);
+  const soon    = due.filter(t=>t._diff>=0);
+
+  if (overdue.length) {
+    new Notification('🔴 Rent Overdue', {
+      body: overdue.slice(0,3).map(t=>`${t.name} — ${Math.abs(t._diff)}d overdue`).join('\n') + (overdue.length>3?`\n+${overdue.length-3} more`:''),
+      tag: 'renttrack-overdue'
+    });
+  }
+  if (soon.length) {
+    new Notification('🟡 Rent Due Soon', {
+      body: soon.slice(0,3).map(t=>`${t.name} — due ${t._diff===0?'today':`in ${t._diff}d`}`).join('\n') + (soon.length>3?`\n+${soon.length-3} more`:''),
+      tag: 'renttrack-duesoon'
+    });
+  }
+}
+
+// ═══════════════════════════════════════════
+// ROUTING
+// ═══════════════════════════════════════════
+function gv(v) {
+  view = v; filter = view==='tenants' ? filter : 'all';
+  document.querySelectorAll('[id^="n-"],[id^="tt-"]').forEach(el => el.classList.remove('on'));
+  const ne=g('n-'+v), te=g('tt-'+v);
+  if(ne) ne.classList.add('on');
+  if(te) te.classList.add('on');
+  updateBadges(); render();
+}
+window.gv = gv;
+
+function fv(f) {
+  filter = f; gv('tenants');
+  document.querySelectorAll('[id^="n-f-"]').forEach(el => el.classList.remove('on'));
+  const el = g('n-f-'+f); if(el) el.classList.add('on');
+}
+window.fv = fv;
+
+function render() {
+  const c = g('content');
+  if (!c) return;
+  c.className = 'content fade';
+  void c.offsetWidth;
+  if      (view==='dashboard') c.innerHTML = vDashboard();
+  else if (view==='tenants')   c.innerHTML = vTenants();
+  else if (view==='payments')  c.innerHTML = vPayments();
+  else if (view==='users')     c.innerHTML = vUsers();
+  else if (view==='settings')  c.innerHTML = vSettings();
+  else if (view==='reports')   c.innerHTML = vReports();
+  else if (view==='calendar')  c.innerHTML = vCalendar();
+}
+
+function updateBadges() {
+  const nt=g('nb-t'), np=g('nb-p');
+  if(nt) nt.textContent = tenants.length;
+  if(np) np.textContent = payments.length;
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+function vDashboard() {
+  const total     = tenants.length;
+  const paidC     = tenants.filter(t=>t.status==='paid').length;
+  const dueC      = tenants.filter(t=>t.status==='due').length;
+  const partC     = tenants.filter(t=>t.status==='partial').length;
+  const monthly   = tenants.reduce((s,t)=>s+num(t.rent),0);
+  const collected = payments.reduce((s,p)=>s+num(p.amount),0);
+  const recent    = payments.slice(0,6);
+
+  // Bar chart by apt group
+  const aptMap = {};
+  tenants.forEach(t => {
+    const k = (t.apt||'').split(' ').slice(0,3).join(' ');
+    aptMap[k] = (aptMap[k]||0) + num(t.rent);
+  });
+  const aptKeys = Object.keys(aptMap).slice(0,7);
+  const maxV    = Math.max(...Object.values(aptMap),1);
+  const BCOLS   = ['#4f8eff','#00e5a0','#a855f7','#ff6b35','#ffd32a','#ff4757','#00b4d8'];
+  const barsHTML = aptKeys.map((k,i)=>{
+    const h = Math.round(aptMap[k]/maxV*100);
+    return `<div class="bw">
+      <div class="bar" style="height:${h}%;background:${BCOLS[i%BCOLS.length]}" data-v="$${aptMap[k]}/mo"></div>
+      <div class="bar-lbl">${k.replace(/Apt|Neezoe/gi,'').trim().slice(0,7)||k.slice(0,7)}</div>
+    </div>`;
+  }).join('');
+
+  // Donut
+  const dData   = [{l:'Paid',v:paidC,c:'#00e5a0'},{l:'Partial',v:partC,c:'#ffd32a'},{l:'Due',v:dueC,c:'#ff4757'}];
+  const dTotal  = paidC+partC+dueC||1;
+  const R=50, circ=2*Math.PI*R; let off=0;
+  const segs = dData.map(d=>{
+    const dash=d.v/dTotal*circ;
+    const s=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${d.c}" stroke-width="14"
+      stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-off}" stroke-linecap="butt"/>`;
+    off+=dash; return s;
+  }).join('');
+  const legHTML = dData.map(d=>`<div class="leg-item">
+    <div class="leg-dot" style="background:${d.c}"></div>
+    <div class="leg-lbl">${d.l}</div><div class="leg-val">${d.v}</div>
+  </div>`).join('');
+
+  // Activity
+  const actHTML = recent.length ? recent.map(p=>{
+    const t = tenants.find(x=>x.id===p.tenantId)||{name:'Unknown',apt:''};
+    return `<div class="act-item">
+      <div class="act-ic a-pay">💳</div>
+      <div class="act-body">
+        <div class="act-txt">${t.name} paid <strong style="color:var(--grn)">$${p.amount}</strong></div>
+        <div class="act-time">${fmtD(p.date)} · ${t.apt}</div>
+      </div>
+      <div class="act-amt">+$${p.amount}</div>
+    </div>`;
+  }).join('') : '<div style="color:var(--t3);font-size:.79rem;padding:12px 0">No payments logged yet</div>';
+
+  // Upcoming
+  const todayMs = Date.now();
+  const upHTML  = tenants
+    .filter(t=>t.nextDate)
+    .map(t=>({ ...t, _diff: Math.ceil((new Date(t.nextDate)-todayMs)/864e5) }))
+    .sort((a,b)=>a._diff-b._diff)
+    .slice(0,6).map(t=>{
+      const over=t._diff<0, soon=t._diff>=0&&t._diff<=7;
+      const col = over?'var(--red)':soon?'var(--ylw)':'var(--t2)';
+      const lbl = over?`${Math.abs(t._diff)}d overdue`:t._diff===0?'Today':`in ${t._diff}d`;
+      return `<div class="up-item">
+        <div class="up-ic ${over||soon?'a-due':'a-new'}">${over?'⚠️':'📅'}</div>
+        <div style="flex:1"><div style="font-size:.77rem;font-weight:600">${t.name}</div>
+        <div style="font-size:.65rem;color:var(--t3)">${t.apt}</div></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:${col};font-weight:600">${lbl}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--t3);font-size:.79rem;padding:12px 0">No upcoming dates set</div>';
+
+  return `
+  <div class="stats">
+    <div class="sc c1" onclick="gv('tenants')">
+      <div class="sc-ic">🏘</div><div class="sc-lbl">Total Tenants</div>
+      <div class="sc-val">${total}</div><div class="sc-sub">All units combined</div>
+      <div class="sc-tag tag-up">Active</div>
+    </div>
+    <div class="sc c2" onclick="fv('paid')">
+      <div class="sc-ic">✅</div><div class="sc-lbl">Paid Up</div>
+      <div class="sc-val">${paidC}</div>
+      <div class="sc-sub">${total?Math.round(paidC/total*100):0}% of tenants</div>
+      <div class="sc-tag tag-up">↑ Good</div>
+    </div>
+    <div class="sc c3" onclick="gv('payments')">
+      <div class="sc-ic">💰</div><div class="sc-lbl">Total Collected</div>
+      <div class="sc-val">$${collected.toLocaleString()}</div>
+      <div class="sc-sub">$${monthly}/mo expected</div>
+    </div>
+    <div class="sc c4" onclick="fv('due')">
+      <div class="sc-ic">⚠️</div><div class="sc-lbl">Overdue</div>
+      <div class="sc-val">${dueC}</div>
+      <div class="sc-sub">${partC} partial payments</div>
+      ${dueC>0?'<div class="sc-tag tag-dn">Needs attention</div>':''}
+    </div>
+  </div>
+
+  <div class="chart-row">
+    <div class="card">
+      <div class="card-title">
+        <span>Rent by Unit Group</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--t3)">$${monthly}/mo total</span>
+      </div>
+      <div class="bars">${barsHTML||'<div style="color:var(--t3);font-size:.79rem">Add tenants to see chart</div>'}</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>Payment Status</span></div>
+      <div class="donut-wrap">
+        <svg class="donut-svg" width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--s3)" stroke-width="14"/>
+          ${segs}
+        </svg>
+        <div class="leg">${legHTML}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="card-title">
+        <span>Recent Payments</span>
+        <button class="btn btn-ghost btn-xs" onclick="gv('payments')">View all →</button>
+      </div>
+      <div class="act-list">${actHTML}</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>Upcoming Due Dates</span></div>
+      ${upHTML}
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// TENANTS VIEW
+// ═══════════════════════════════════════════
+const COLS=[
+  {bg:'rgba(79,142,255,.12)',c:'#4f8eff'},{bg:'rgba(0,229,160,.12)',c:'#00e5a0'},
+  {bg:'rgba(168,85,247,.12)',c:'#a855f7'},{bg:'rgba(255,107,53,.12)',c:'#ff6b35'},
+  {bg:'rgba(255,211,42,.12)',c:'#ffd32a'},{bg:'rgba(255,71,87,.12)',c:'#ff4757'},
+];
+const gc = i => COLS[i%COLS.length];
+
+function badge(s) {
+  if(s==='paid')    return '<span class="badge bp">Paid</span>';
+  if(s==='due')     return '<span class="badge bd">Due</span>';
+  return '<span class="badge bx">Partial</span>';
+}
+
+function tCard(t,i) {
+  const col  = gc(i);
+  const pct  = Math.min(100, t.monthsPaid ? Math.round(t.monthsPaid/(t.monthsPaid+3)*100) : 0);
+  const bc   = t.status==='due'?'var(--red)':t.status==='partial'?'var(--ylw)':'var(--grn)';
+  const isAd = currentProfile?.role==='admin';
+  return `<div class="tc s${(t.status||'paid')[0]}" onclick="showDetail('${t.id}')">
+    <div class="tc-hd">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="tav" style="background:${col.bg};color:${col.c}">${initials(t.name)}</div>
+        <div><div class="tn">${t.name}</div><div class="ta">${t.apt}</div></div>
+      </div>
+      ${badge(t.status||'paid')}
+    </div>
+    <div class="tm">
+      <div><div class="ml">Monthly Rent</div><div class="mv">$${t.rent||0}</div></div>
+      <div><div class="ml">Total Paid</div><div class="mv">$${num(t.amtPaid).toLocaleString()}</div></div>
+      <div><div class="ml">Months</div><div class="mv">${t.monthsPaid||0}</div></div>
+      <div><div class="ml">Next Due</div><div class="mv" style="font-size:.68rem">${fmtD(t.nextDate)}</div></div>
+    </div>
+    <div class="pbar"><div class="pfill" style="width:${pct}%;background:${bc}"></div></div>
+    ${t.description?`<div style="font-size:.69rem;color:var(--t2);margin-top:9px;line-height:1.5;border-top:1px solid var(--br);padding-top:9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${t.description}</div>`:''}
+    ${isAd?`<div class="tc-acts" onclick="event.stopPropagation()">
+      <button class="btn btn-ghost btn-xs" onclick="editT('${t.id}')">Edit</button>
+      <button class="btn btn-grn btn-xs" onclick="openPMFor('${t.id}')">+ Pay</button>
+      <button class="btn btn-red btn-xs" onclick="confirmDel('${t.id}')">Delete</button>
+    </div>`:''}
+  </div>`;
+}
+
+let sortBy = 'name';
+let sortDir = 'asc';
+
+function sortedTenants(list) {
+  return [...list].sort((a,b) => {
+    let va, vb;
+    if (sortBy==='name')     { va=a.name||''; vb=b.name||''; return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va); }
+    if (sortBy==='rent')     { va=num(a.rent); vb=num(b.rent); }
+    if (sortBy==='amtPaid')  { va=num(a.amtPaid); vb=num(b.amtPaid); }
+    if (sortBy==='nextDate') { va=a.nextDate||'9999'; vb=b.nextDate||'9999'; return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va); }
+    if (sortBy==='status')   { const o={paid:0,partial:1,due:2}; va=o[a.status]??3; vb=o[b.status]??3; }
+    return sortDir==='asc' ? va-vb : vb-va;
+  });
+}
+
+function setSort(field) {
+  if (sortBy===field) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortBy=field; sortDir='asc'; }
+  render();
+}
+window.setSort = setSort;
+
+function sortIcon(field) {
+  if (sortBy!==field) return '<span style="opacity:.3">⇅</span>';
+  return sortDir==='asc' ? '↑' : '↓';
+}
+
+function vTenants() {
+  const raw  = filter==='all' ? tenants : tenants.filter(t=>t.status===filter);
+  const list = sortedTenants(raw);
+  const isAd = currentProfile?.role==='admin';
+  return `<div class="sec-hd">
+    <div class="sec-title">Tenants (${list.length})</div>
+    <div class="sec-acts">
+      <input class="srch" placeholder="Search name or unit…" oninput="searchT(this.value)" id="tsrch">
+      ${isAd?`<button class="btn btn-acc btn-sm" onclick="openTM()">+ Add Tenant</button>`:''}
+    </div>
+  </div>
+  <div class="sort-bar">
+    <span style="font-size:.65rem;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">Sort:</span>
+    ${[['name','Name'],['rent','Rent'],['amtPaid','Total Paid'],['nextDate','Due Date'],['status','Status']].map(([f,l])=>
+      `<button class="sort-btn ${sortBy===f?'sort-on':''}" onclick="setSort('${f}')">${l} ${sortIcon(f)}</button>`
+    ).join('')}
+  </div>
+  <div class="tgrid" id="tgrid">
+    ${list.length
+      ? list.map((t,i)=>tCard(t,i)).join('')
+      : '<div class="empty"><div class="empty-ic">🏠</div><div>No tenants found</div></div>'}
+  </div>`;
+}
+
+function searchT(q) {
+  const grid=g('tgrid'); if(!grid) return;
+  const lq=q.toLowerCase();
+  const fl=tenants.filter(t=>t.name.toLowerCase().includes(lq)||t.apt.toLowerCase().includes(lq)||(t.phone||'').includes(lq));
+  grid.innerHTML=fl.length?fl.map((t,i)=>tCard(t,i)).join(''):'<div class="empty"><div class="empty-ic">🔍</div><div>No matches</div></div>';
+}
+window.searchT = searchT;
+
+// ═══════════════════════════════════════════
+// PAYMENTS VIEW
+// ═══════════════════════════════════════════
+function vPayments() {
+  const total = payments.reduce((s,p)=>s+num(p.amount),0);
+  const isAd  = currentProfile?.role==='admin';
+  return `<div class="sec-hd">
+    <div class="sec-title">Payment Log</div>
+    <div class="sec-acts">
+      <span class="mono" style="font-size:.79rem;color:var(--grn)">Total: $${total.toLocaleString()}</span>
+      ${isAd?`<button class="btn btn-acc btn-sm" onclick="openPM()">+ Log Payment</button>`:''}
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Tenant</th><th>Unit</th><th>Amount</th><th>Months</th><th>Date Paid</th><th>Next Due</th><th>Notes</th></tr></thead>
+      <tbody>
+        ${payments.length ? payments.map(p=>{
+          const t=tenants.find(x=>x.id===p.tenantId)||{name:'Unknown',apt:''};
+          return `<tr>
+            <td style="font-weight:600">${t.name}</td>
+            <td style="font-size:.69rem;color:var(--t3)">${t.apt}</td>
+            <td class="mono" style="color:var(--grn)">+$${num(p.amount).toLocaleString()}</td>
+            <td class="mono">${p.months||'—'}</td>
+            <td>${fmtD(p.date)}</td>
+            <td>${fmtD(p.nextDate)}</td>
+            <td style="color:var(--t3);font-size:.72rem">${p.notes||'—'}</td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:28px">No payments logged yet</td></tr>'}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// DETAIL MODAL
+// ═══════════════════════════════════════════
+function showDetail(id) {
+  const t=tenants.find(x=>x.id===id); if(!t) return;
+  const ci=tenants.indexOf(t), col=gc(ci);
+  const tPays=payments.filter(p=>p.tenantId===id);
+  const isAd=currentProfile?.role==='admin';
+  g('dtTitle').textContent=t.name;
+  g('dtBody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:18px">
+      <div class="tav" style="width:46px;height:46px;font-size:1.05rem;border-radius:11px;background:${col.bg};color:${col.c}">${initials(t.name)}</div>
+      <div>
+        <div style="font-weight:700;font-size:.93rem">${t.name}</div>
+        <div style="font-size:.7rem;color:var(--t3);margin-top:2px">${t.apt}</div>
+        <div style="margin-top:5px">${badge(t.status||'paid')}</div>
+      </div>
+    </div>
+    <div class="dgrid">
+      <div class="di"><div class="ml">Monthly Rent</div><div class="mv mono">$${t.rent||0}</div></div>
+      <div class="di"><div class="ml">Total Paid</div><div class="mv mono">$${num(t.amtPaid).toLocaleString()}</div></div>
+      <div class="di"><div class="ml">Months Paid</div><div class="mv mono">${t.monthsPaid||0}</div></div>
+      <div class="di"><div class="ml">Phone</div><div class="mv" style="font-size:.72rem">${t.phone||'—'}</div></div>
+      <div class="di"><div class="ml">Next Due</div><div class="mv" style="font-size:.72rem">${fmtD(t.nextDate)}</div></div>
+      <div class="di"><div class="ml">Notes</div><div class="mv" style="font-size:.72rem">${t.comment||'—'}</div></div>
+    </div>
+    ${t.description?`<div style="background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:16px"><div class="ml" style="margin-bottom:5px">Description</div><div style="font-size:.79rem;color:var(--t2);line-height:1.6">${t.description}</div></div>`:''}
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:9px;font-weight:700">Payment History (${tPays.length})</div>
+    <div class="plog">
+      ${tPays.length ? tPays.map(p=>`
+        <div class="pl-item">
+          <div class="pl-ic">↓</div>
+          <div class="pl-info">
+            <div class="pl-desc">$${p.amount} · ${p.months||1} month${(p.months||1)>1?'s':''}</div>
+            <div class="pl-date">${fmtD(p.date)} · Next: ${fmtD(p.nextDate)}${p.notes?' · '+p.notes:''}</div>
+          </div>
+          <div class="pl-amt">+$${p.amount}</div>
+        </div>`).join('') : '<div style="color:var(--t3);font-size:.78rem;padding:10px 0">No payment records yet.</div>'}
+    </div>
+    ${isAd?`<div class="macts">
+      <button class="btn btn-ghost btn-sm" onclick="cm('dtModal');editT('${t.id}')">Edit Tenant</button>
+      <button class="btn btn-acc btn-sm" onclick="cm('dtModal');openPMFor('${t.id}')">+ Log Payment</button>
+    </div>`:''}`;
+  om('dtModal');
+}
+window.showDetail = showDetail;
+
+// ═══════════════════════════════════════════
+// USERS VIEW
+// ═══════════════════════════════════════════
+async function vUsers() {
+  const c    = g('content');
+  const isAd = currentProfile?.role==='admin';
+  // fetch all profiles from firestore
+  let profiles = [];
+  try {
+    const snap = await getDocs(collection(db,'profiles'));
+    profiles   = snap.docs.map(d=>({id:d.id,...d.data()}));
+  } catch(e) { profiles = []; }
+
+  c.innerHTML = `<div class="sec-hd">
+    <div class="sec-title">Users (${profiles.length})</div>
+    ${isAd?`<button class="btn btn-acc btn-sm" onclick="showAddUser()">+ Add User</button>`:''}
+  </div>
+  <div class="ulist">
+    ${profiles.map(u=>`
+      <div class="urow">
+        <div class="urow-av">${initials(u.name||u.email||'?')}</div>
+        <div class="urow-info">
+          <div class="urow-name">${u.name||u.email} ${u.id===currentUser?.uid?'<span style="font-size:.62rem;color:var(--t3)">(you)</span>':''}</div>
+          <div class="urow-meta">${u.email||''} · Joined ${fmtTs(u.createdAt)}</div>
+        </div>
+        <span class="role-badge ${u.role==='admin'?'r-admin':'r-viewer'}">${u.role||'viewer'}</span>
+        ${isAd?`<div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-xs" onclick="changeRole('${u.id}','${u.role}')">
+            ${u.role==='admin'?'Make Viewer':'Make Admin'}
+          </button>
+        </div>`:''}
+      </div>`).join('')}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-title"><span>How to add users</span></div>
+    <div style="font-size:.78rem;color:var(--t2);line-height:1.9">
+      Share the app URL with anyone you want to invite.<br>
+      They click <strong>Create Account</strong> and sign up.<br>
+      You can then change their role to <strong>Admin</strong> or <strong>Viewer</strong> from this page.
+    </div>
+  </div>`;
+}
+
+async function changeRole(uid, currentRole) {
+  const newRole = currentRole==='admin' ? 'viewer' : 'admin';
+  await updateDoc(doc(db,'profiles',uid), { role: newRole });
+  toast(`Role changed to ${newRole}`,'s');
+  gv('users');
+}
+window.changeRole = changeRole;
+
+function showAddUser() {
+  authTab('signup');
+  doSignout();
+}
+window.showAddUser = showAddUser;
+
+// ═══════════════════════════════════════════
+// CALENDAR VIEW
+// ═══════════════════════════════════════════
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-indexed
+
+function vCalendar() {
+  const today    = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Build a map of date → [tenants due]
+  const dueMap = {};
+  tenants.forEach(t => {
+    if (!t.nextDate) return;
+    const key = t.nextDate.slice(0,10);
+    if (!dueMap[key]) dueMap[key] = [];
+    dueMap[key].push(t);
+  });
+
+  // Also mark payment dates
+  const payMap = {};
+  payments.forEach(p => {
+    if (!p.date) return;
+    const key = p.date.slice(0,10);
+    if (!payMap[key]) payMap[key] = [];
+    payMap[key].push(p);
+  });
+
+  const monthName = new Date(calYear, calMonth, 1)
+    .toLocaleDateString('en-US', { month:'long', year:'numeric' });
+
+  // Days in month, first weekday
+  const firstDay  = new Date(calYear, calMonth, 1).getDay();
+  const daysInMon = new Date(calYear, calMonth+1, 0).getDate();
+  const daysInPrev= new Date(calYear, calMonth, 0).getDate();
+
+  // Build legend summary for this month
+  const monthKey = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+  const dueTenants  = tenants.filter(t => t.nextDate?.startsWith(monthKey));
+  const paidTenants = payments.filter(p => p.date?.startsWith(monthKey));
+  const overdue     = tenants.filter(t => {
+    if (!t.nextDate) return false;
+    return t.nextDate < todayStr && t.status !== 'paid';
+  });
+
+  // Build grid cells
+  let cells = '';
+  const totalCells = Math.ceil((firstDay + daysInMon) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum  = i - firstDay + 1;
+    const isOther = dayNum < 1 || dayNum > daysInMon;
+    const dispDay = isOther
+      ? (dayNum < 1 ? daysInPrev + dayNum : dayNum - daysInMon)
+      : dayNum;
+
+    const dateStr = isOther ? null
+      : `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+
+    const isToday    = dateStr === todayStr;
+    const dueTens    = dateStr ? (dueMap[dateStr] || []) : [];
+    const paidPays   = dateStr ? (payMap[dateStr] || []) : [];
+    const hasOverdue = dueTens.some(t => dateStr < todayStr && t.status !== 'paid');
+    const hasDue     = dueTens.length > 0;
+    const hasPaid    = paidPays.length > 0;
+
+    let cellClass = 'cal-cell';
+    if (isOther)    cellClass += ' cal-other';
+    if (isToday)    cellClass += ' cal-today';
+    if (hasOverdue) cellClass += ' cal-overdue';
+    else if (hasDue) cellClass += ' cal-due';
+
+    const dots = [
+      hasPaid    ? `<div class="cal-dot dot-paid" title="${paidPays.length} payment(s)"></div>` : '',
+      hasDue     ? `<div class="cal-dot dot-due" title="${dueTens.length} due"></div>` : '',
+    ].join('');
+
+    const tenantPills = !isOther && dueTens.length
+      ? dueTens.slice(0,2).map(t => {
+          const diff = dateStr < todayStr ? -Math.ceil((new Date(todayStr)-new Date(dateStr))/864e5)
+                     : Math.ceil((new Date(dateStr)-new Date(todayStr))/864e5);
+          const isOvd = diff < 0;
+          return `<div class="cal-pill ${isOvd?'pill-ov':'pill-due'}" onclick="event.stopPropagation();showDetail('${t.id}')" title="${t.name}">${t.name.split(' ')[0]}</div>`;
+        }).join('') + (dueTens.length > 2 ? `<div class="cal-pill pill-more">+${dueTens.length-2}</div>` : '')
+      : '';
+
+    const paidPills = !isOther && paidPays.length
+      ? paidPays.slice(0,1).map(p => {
+          const t = tenants.find(x=>x.id===p.tenantId);
+          return t ? `<div class="cal-pill pill-paid" title="${t.name} paid $${p.amount}">${t.name.split(' ')[0]} ✓</div>` : '';
+        }).join('') + (paidPays.length > 1 ? `<div class="cal-pill pill-more">+${paidPays.length-1} paid</div>` : '')
+      : '';
+
+    cells += `<div class="${cellClass}" onclick="${dateStr?`calDayClick('${dateStr}')`:''}" style="${isOther?'opacity:.35':''}">
+      <div class="cal-day-num">${dispDay}</div>
+      <div class="cal-dots">${dots}</div>
+      <div class="cal-pills">${tenantPills}${paidPills}</div>
+    </div>`;
+  }
+
+  return `
+  <div class="sec-hd">
+    <div class="sec-title">Payment Calendar</div>
+    <div class="sec-acts" style="gap:6px">
+      <button class="btn btn-ghost btn-sm" onclick="calNav(-1)">← Prev</button>
+      <button class="btn btn-ghost btn-sm" onclick="calGoToday()">Today</button>
+      <button class="btn btn-ghost btn-sm" onclick="calNav(1)">Next →</button>
+    </div>
+  </div>
+
+  <!-- Month summary strip -->
+  <div class="cal-summary">
+    <div class="cal-sum-item">
+      <div class="cal-sum-dot" style="background:var(--red)"></div>
+      <div>
+        <div class="cal-sum-val">${overdue.length}</div>
+        <div class="cal-sum-lbl">Overdue</div>
+      </div>
+    </div>
+    <div class="cal-sum-item">
+      <div class="cal-sum-dot" style="background:var(--ylw)"></div>
+      <div>
+        <div class="cal-sum-val">${dueTenants.length}</div>
+        <div class="cal-sum-lbl">Due This Month</div>
+      </div>
+    </div>
+    <div class="cal-sum-item">
+      <div class="cal-sum-dot" style="background:var(--grn)"></div>
+      <div>
+        <div class="cal-sum-val">${paidTenants.length}</div>
+        <div class="cal-sum-lbl">Payments Logged</div>
+      </div>
+    </div>
+    <div class="cal-sum-item">
+      <div class="cal-sum-dot" style="background:var(--acc)"></div>
+      <div>
+        <div class="cal-sum-val">$${paidTenants.reduce((s,p)=>s+num(p.amount),0).toLocaleString()}</div>
+        <div class="cal-sum-lbl">Collected</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar grid -->
+  <div class="cal-wrap">
+    <div class="cal-month-hd">
+      <div class="cal-month-name">${monthName}</div>
+      <div class="cal-legend">
+        <div class="leg-item"><div class="cal-dot dot-due" style="width:9px;height:9px"></div><span>Due date</span></div>
+        <div class="leg-item"><div class="cal-dot dot-paid" style="width:9px;height:9px"></div><span>Payment logged</span></div>
+      </div>
+    </div>
+    <div class="cal-grid">
+      ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="cal-dow">${d}</div>`).join('')}
+      ${cells}
+    </div>
+  </div>
+
+  <!-- Due this month list -->
+  ${dueTenants.length ? `
+  <div class="card" style="margin-top:16px">
+    <div class="card-title"><span>Due dates this month</span></div>
+    <div class="plog">
+      ${dueTenants.sort((a,b)=>(a.nextDate||'').localeCompare(b.nextDate||'')).map(t => {
+        const diff = Math.ceil((new Date(t.nextDate) - new Date(todayStr)) / 864e5);
+        const isOvd = diff < 0;
+        const lbl   = isOvd ? `${Math.abs(diff)}d overdue` : diff===0 ? 'Today' : `in ${diff}d`;
+        return `<div class="pl-item" onclick="showDetail('${t.id}')" style="cursor:pointer">
+          <div class="pl-ic ${isOvd?'':''}">📅</div>
+          <div class="pl-info">
+            <div class="pl-desc">${t.name} — ${t.apt}</div>
+            <div class="pl-date">$${t.rent}/mo · Due ${fmtD(t.nextDate)}</div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:.73rem;color:${isOvd?'var(--red)':'var(--ylw)'};font-weight:700">${lbl}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>` : ''}`;
+}
+window.vCalendar = vCalendar;
+
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  render();
+}
+window.calNav = calNav;
+
+function calGoToday() {
+  const now = new Date();
+  calYear = now.getFullYear(); calMonth = now.getMonth();
+  render();
+}
+window.calGoToday = calGoToday;
+
+function calDayClick(dateStr) {
+  // show a mini popover of tenants due / payments on that day
+  const dueTens = tenants.filter(t => t.nextDate?.startsWith(dateStr));
+  const paidPs  = payments.filter(p => p.date?.startsWith(dateStr));
+  if (!dueTens.length && !paidPs.length) return;
+
+  const label = new Date(dateStr+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  g('cfTitle').textContent = label;
+  g('cfOk').style.display = 'none';
+
+  g('cfMsg').innerHTML = [
+    dueTens.length ? `<div style="margin-bottom:10px"><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:6px">Due on this date</div>`
+      + dueTens.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--br)">
+          <div style="font-size:.8rem;font-weight:600;flex:1">${t.name}</div>
+          <div style="font-size:.73rem;color:var(--t2)">${t.apt}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:.77rem;color:var(--ylw)">$${t.rent}</div>
+          <button onclick="cm('cfModal');showDetail('${t.id}')" style="font-family:'Space Grotesk',sans-serif;font-size:.65rem;padding:3px 8px;border-radius:5px;background:var(--acc-g);border:1px solid var(--acc);color:var(--acc);cursor:pointer">View</button>
+        </div>`).join('') + `</div>` : '',
+    paidPs.length ? `<div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:6px">Payments on this date</div>`
+      + paidPs.map(p=>{const t=tenants.find(x=>x.id===p.tenantId)||{name:'Unknown'};
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--br)">
+          <div style="font-size:.8rem;font-weight:600;flex:1">${t.name}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--grn)">+$${p.amount}</div>
+        </div>`;}).join('') + `</div>` : ''
+  ].join('');
+
+  om('cfModal');
+  // restore cfOk after close
+  const orig = g('cfOk').onclick;
+  g('cfOk').onclick = () => { g('cfOk').style.display=''; g('cfOk').onclick=orig; cm('cfModal'); };
+}
+window.calDayClick = calDayClick;
+
+// ═══════════════════════════════════════════
+// REPORTS VIEW (Excel Export)
+// ═══════════════════════════════════════════
+function vReports() {
+  const tenantOpts = tenants.map(t=>`<option value="${t.id}">${t.name} — ${t.apt}</option>`).join('');
+  const monthOpts = lastNMonths(18).map(m=>`<option value="${m.key}">${m.label}</option>`).join('');
+
+  return `<div class="sec-hd"><div class="sec-title">Reports & Exports</div></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="card-title"><span>📄 Export by Tenant</span></div>
+      <div style="font-size:.76rem;color:var(--t2);margin-bottom:14px;line-height:1.6">
+        One sheet per tenant — full payment history, all months, in a single workbook.
+      </div>
+      <div class="fg">
+        <div class="fgrp">
+          <label>Tenants to include</label>
+          <select id="repTenantSel" multiple size="6" style="height:auto">
+            <option value="__all__" selected>— All Tenants —</option>
+            ${tenantOpts}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-acc btn-sm btn-full" style="margin-top:12px" onclick="exportByTenant()">⬇ Generate Excel (by Tenant)</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>📅 Export by Month</span></div>
+      <div style="font-size:.76rem;color:var(--t2);margin-bottom:14px;line-height:1.6">
+        One sheet per month — every tenant's payment status for that month, in a single workbook.
+      </div>
+      <div class="fg">
+        <div class="fgrp">
+          <label>Months to include</label>
+          <select id="repMonthSel" multiple size="6" style="height:auto">
+            <option value="__all__" selected>— Last 12 Months —</option>
+            ${monthOpts}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-acc btn-sm btn-full" style="margin-top:12px" onclick="exportByMonth()">⬇ Generate Excel (by Month)</button>
+    </div>
+
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title"><span>📊 Full Data Export</span></div>
+      <div style="font-size:.76rem;color:var(--t2);margin-bottom:14px;line-height:1.6">
+        Everything in one workbook — Tenants sheet + Payments sheet, unfiltered.
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="exportFullData()">⬇ Generate Full Excel Workbook</button>
+    </div>
+  </div>`;
+}
+
+// Helper: list of {key:'2026-06', label:'June 2026'} for the last N months
+function lastNMonths(n) {
+  const out = [];
+  const d = new Date();
+  d.setDate(1);
+  for (let i=0; i<n; i++) {
+    const key = d.toISOString().slice(0,7);
+    const label = d.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    out.push({key,label});
+    d.setMonth(d.getMonth()-1);
+  }
+  return out;
+}
+
+function monthKeyOf(dateStr) {
+  if (!dateStr) return null;
+  try { return (typeof dateStr==='string'?dateStr:dateStr).slice(0,7); } catch(e) { return null; }
+}
+
+function getSelectedValues(selId) {
+  const sel = g(selId);
+  return Array.from(sel.selectedOptions).map(o=>o.value);
+}
+
+// ── Export 1: By Tenant — one sheet per tenant ──
+function exportByTenant() {
+  if (typeof XLSX === 'undefined') { toast('Excel library failed to load','e'); return; }
+  let sel = getSelectedValues('repTenantSel');
+  let list = (sel.includes('__all__') || !sel.length) ? tenants : tenants.filter(t=>sel.includes(t.id));
+  if (!list.length) { toast('No tenants selected','e'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  list.forEach(t => {
+    const tPays = payments.filter(p=>p.tenantId===t.id).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const rows = [
+      ['Tenant', t.name],
+      ['Unit', t.apt],
+      ['Monthly Rent', t.rent],
+      ['Phone', t.phone||''],
+      ['Status', t.status],
+      ['Total Paid', num(t.amtPaid)],
+      ['Months Paid', t.monthsPaid||0],
+      ['Next Due Date', fmtD(t.nextDate)],
+      ['Notes', t.comment||''],
+      [],
+      ['Payment Date','Amount','Months Covered','Next Due After','Notes']
+    ];
+    tPays.forEach(p => rows.push([fmtD(p.date), num(p.amount), p.months||1, fmtD(p.nextDate), p.notes||'']));
+    if (!tPays.length) rows.push(['No payments recorded','','','','']);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:16},{wch:14},{wch:14},{wch:16},{wch:30}];
+    const sheetName = safeSheetName(t.name);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  XLSX.writeFile(wb, `RentTrack_ByTenant_${today()}.xlsx`);
+  toast('Excel file downloaded','s');
+}
+window.exportByTenant = exportByTenant;
+
+// ── Export 2: By Month — one sheet per month, all tenants as rows ──
+function exportByMonth() {
+  if (typeof XLSX === 'undefined') { toast('Excel library failed to load','e'); return; }
+  let sel = getSelectedValues('repMonthSel');
+  let months = (sel.includes('__all__') || !sel.length) ? lastNMonths(12) : sel.map(k=>({key:k,label:monthLabelFromKey(k)}));
+
+  const wb = XLSX.utils.book_new();
+
+  months.forEach(m => {
+    const rows = [['Tenant','Unit','Monthly Rent','Paid This Month','Payment Date','Status','Notes']];
+    tenants.forEach(t => {
+      const pay = payments.find(p => p.tenantId===t.id && monthKeyOf(p.date)===m.key);
+      rows.push([
+        t.name, t.apt, t.rent,
+        pay ? num(pay.amount) : 0,
+        pay ? fmtD(pay.date) : '—',
+        pay ? 'Paid' : (t.status==='due'?'Due':'No record'),
+        pay?.notes || ''
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:20},{wch:22},{wch:12},{wch:14},{wch:14},{wch:12},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(m.label));
+  });
+
+  XLSX.writeFile(wb, `RentTrack_ByMonth_${today()}.xlsx`);
+  toast('Excel file downloaded','s');
+}
+window.exportByMonth = exportByMonth;
+
+// ── Export 3: Full raw data ──
+function exportFullData() {
+  if (typeof XLSX === 'undefined') { toast('Excel library failed to load','e'); return; }
+  const wb = XLSX.utils.book_new();
+
+  const tRows = [['Name','Unit','Monthly Rent','Phone','Status','Total Paid','Months Paid','Next Due','Notes']];
+  tenants.forEach(t => tRows.push([t.name,t.apt,t.rent,t.phone||'',t.status,num(t.amtPaid),t.monthsPaid||0,fmtD(t.nextDate),t.comment||'']));
+  const wsT = XLSX.utils.aoa_to_sheet(tRows);
+  wsT['!cols']=[{wch:20},{wch:22},{wch:12},{wch:16},{wch:10},{wch:12},{wch:12},{wch:14},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, wsT, 'Tenants');
+
+  const pRows = [['Tenant','Unit','Amount','Months','Date Paid','Next Due','Notes']];
+  payments.forEach(p => {
+    const t = tenants.find(x=>x.id===p.tenantId)||{name:'Unknown',apt:''};
+    pRows.push([t.name,t.apt,num(p.amount),p.months||1,fmtD(p.date),fmtD(p.nextDate),p.notes||'']);
+  });
+  const wsP = XLSX.utils.aoa_to_sheet(pRows);
+  wsP['!cols']=[{wch:20},{wch:22},{wch:12},{wch:10},{wch:14},{wch:14},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, wsP, 'Payments');
+
+  XLSX.writeFile(wb, `RentTrack_FullExport_${today()}.xlsx`);
+  toast('Excel file downloaded','s');
+}
+window.exportFullData = exportFullData;
+
+function safeSheetName(name) {
+  // Excel sheet names: max 31 chars, no : \ / ? * [ ]
+  return (name||'Sheet').replace(/[:\\\/\?\*\[\]]/g,'').slice(0,31) || 'Sheet';
+}
+function monthLabelFromKey(key) {
+  const [y,m] = key.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+}
+
+// ═══════════════════════════════════════════
+// SETTINGS VIEW
+// ═══════════════════════════════════════════
+function vSettings() {
+  const me = currentProfile;
+  const mins = appSettings.inactivityTimeout || 0;
+  const isDark = appSettings.theme === 'dark';
+  return `<div class="sec-hd"><div class="sec-title">Settings</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <div class="card">
+      <div class="card-title"><span>Your Account</span></div>
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
+        <div class="urow-av" style="width:46px;height:46px;font-size:1rem">${initials(me?.name||'?')}</div>
+        <div>
+          <div style="font-weight:700">${me?.name||'Unknown'}</div>
+          <div style="font-size:.73rem;color:var(--t3)">${currentUser?.email||''}</div>
+          <div style="margin-top:5px"><span class="role-badge ${me?.role==='admin'?'r-admin':'r-viewer'}">${me?.role||'viewer'}</span></div>
+        </div>
+      </div>
+      <button class="btn btn-red btn-sm btn-full" onclick="doSignout()">Sign Out</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Appearance</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <div style="font-size:.82rem;font-weight:600">${isDark ? '🌙 Dark Mode' : '☀️ Light Mode'}</div>
+          <div style="font-size:.7rem;color:var(--t3);margin-top:3px">Toggle between dark and light background</div>
+        </div>
+        <div class="theme-toggle ${isDark?'dark':'light'}" onclick="toggleTheme();if(view==='settings')render()" id="themeToggleSwitch">
+          <div class="theme-knob"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm btn-full" id="themeToggleBtn" onclick="toggleTheme();if(view==='settings')render()">
+        ${isDark ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Auto-Logout (Inactivity)</span></div>
+      <div style="font-size:.76rem;color:var(--t2);margin-bottom:14px;line-height:1.7">
+        Automatically signs you out after a period of inactivity. Set to <strong>0</strong> to disable.
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <input type="range" id="inactSlider" min="0" max="60" step="5" value="${mins}"
+          oninput="updateInactLabel(this.value)"
+          style="flex:1;accent-color:var(--acc);cursor:pointer">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.9rem;min-width:60px;text-align:right" id="inactLabel">
+          ${mins===0?'Off':mins+'m'}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.62rem;color:var(--t3);margin-bottom:14px">
+        <span>Off</span><span>15m</span><span>30m</span><span>45m</span><span>60m</span>
+      </div>
+      <button class="btn btn-acc btn-sm btn-full" onclick="saveInactivitySetting()">Save Timeout</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Database</span></div>
+      <div style="font-size:.75rem;color:var(--t2);line-height:1.8;margin-bottom:14px">
+        ☁️ Connected to <strong style="color:var(--grn)">Firebase</strong><br>
+        All data syncs in real-time across every device.<br>
+        Tenants: <strong>${tenants.length}</strong> &nbsp;|&nbsp; Payments: <strong>${payments.length}</strong>
+      </div>
+    </div>
+
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title"><span>Summary</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px">
+        <div class="di"><div class="ml">Tenants</div><div class="mv mono">${tenants.length}</div></div>
+        <div class="di"><div class="ml">Payments</div><div class="mv mono">${payments.length}</div></div>
+        <div class="di"><div class="ml">Total Collected</div><div class="mv mono">$${payments.reduce((s,p)=>s+num(p.amount),0).toLocaleString()}</div></div>
+        <div class="di"><div class="ml">Monthly Income</div><div class="mv mono">$${tenants.reduce((s,t)=>s+num(t.rent),0).toLocaleString()}</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-title"><span>📬 Support</span></div>
+      <div style="font-size:.78rem;color:var(--t2);line-height:1.9">
+        To request new features or report bugs, email the developer:<br>
+        <a href="mailto:priyash504@gmail.com" style="color:var(--acc);text-decoration:none;font-weight:600">priyash504@gmail.com</a>
+        &nbsp;·&nbsp; Developed by <strong>Priyash Kafle</strong> · RentTrack v2.0
+      </div>
+    </div>
+  </div>`;
+}
+
+// Settings helpers
+function updateInactLabel(val) {
+  const el = g('inactLabel');
+  if (el) el.textContent = val==='0'||val===0 ? 'Off' : val+'m';
+}
+window.updateInactLabel = updateInactLabel;
+
+function saveInactivitySetting() {
+  const val = parseInt(g('inactSlider')?.value) || 0;
+  appSettings.inactivityTimeout = val;
+  saveSettings();
+  resetInactivityTimer();
+  toast(val===0 ? 'Auto-logout disabled' : `Auto-logout set to ${val} minutes`, 's');
+}
+window.saveInactivitySetting = saveInactivitySetting;
+
+// ═══════════════════════════════════════════
+// TENANT CRUD (Firebase)
+// ═══════════════════════════════════════════
+function openTM(id) {
+  g('tmTitle').textContent = id ? 'Edit Tenant' : 'Add Tenant';
+  g('tmId').value = id||'';
+  g('tmErr').classList.remove('on');
+  if (!id) {
+    ['tmName','tmApt','tmPhone','tmNote','tmDesc'].forEach(x=>g(x).value='');
+    ['tmRent','tmPaid','tmMonths'].forEach(x=>g(x).value='');
+    g('tmStatus').value='paid'; g('tmNext').value='';
+  } else {
+    const t=tenants.find(x=>x.id===id); if(!t) return;
+    g('tmName').value=t.name; g('tmApt').value=t.apt; g('tmRent').value=t.rent||'';
+    g('tmPhone').value=t.phone||''; g('tmStatus').value=t.status||'paid';
+    g('tmNext').value=t.nextDate||''; g('tmPaid').value=t.amtPaid||0;
+    g('tmMonths').value=t.monthsPaid||0; g('tmNote').value=t.comment||'';
+    g('tmDesc').value=t.description||'';
+  }
+  om('tmModal');
+}
+window.openTM = openTM;
+function editT(id) { openTM(id); }
+window.editT = editT;
+
+async function saveTenant() {
+  const name=g('tmName').value.trim(), apt=g('tmApt').value.trim();
+  if (!name||!apt) { showErrEl('tmErr','Name and apartment required.'); return; }
+  const btn=g('tmSave'); btn.classList.add('dim'); btn.textContent='Saving…';
+  const id=g('tmId').value;
+  const data = {
+    name, apt,
+    rent:      parseFloat(g('tmRent').value)||0,
+    phone:     g('tmPhone').value.trim(),
+    status:    g('tmStatus').value,
+    nextDate:  g('tmNext').value||null,
+    amtPaid:   parseFloat(g('tmPaid').value)||0,
+    monthsPaid:parseInt(g('tmMonths').value)||0,
+    comment:     g('tmNote').value.trim(),
+    description: g('tmDesc').value.trim(),
+  };
+  try {
+    if (id) { await updateDoc(doc(db,'tenants',id), data); toast('Tenant updated','s'); }
+    else    { data.createdAt=serverTimestamp(); data.createdBy=currentUser.uid; await addDoc(collection(db,'tenants'),data); toast('Tenant added','s'); }
+    cm('tmModal');
+  } catch(e) { showErrEl('tmErr',e.message); }
+  btn.classList.remove('dim'); btn.textContent='Save Tenant';
+}
+window.saveTenant = saveTenant;
+
+function confirmDel(id) {
+  const t=tenants.find(x=>x.id===id); if(!t) return;
+  g('cfTitle').textContent='Delete Tenant';
+  g('cfMsg').textContent=`Delete "${t.name}"? All their payment records will also be removed.`;
+  g('cfOk').onclick = async () => {
+    // delete payments for this tenant
+    const pSnap = await getDocs(query(collection(db,'payments')));
+    const toPay = pSnap.docs.filter(d=>d.data().tenantId===id);
+    await Promise.all(toPay.map(d=>deleteDoc(doc(db,'payments',d.id))));
+    await deleteDoc(doc(db,'tenants',id));
+    cm('cfModal'); toast('Tenant deleted','i');
+  };
+  om('cfModal');
+}
+window.confirmDel = confirmDel;
+
+// ═══════════════════════════════════════════
+// PAYMENT CRUD (Firebase)
+// ═══════════════════════════════════════════
+function openPM() {
+  const sel=g('pmTenant');
+  sel.innerHTML=tenants.map(t=>`<option value="${t.id}">${t.name} — ${t.apt}</option>`).join('');
+  g('pmAmt').value=''; g('pmDate').value=today();
+  g('pmMonths').value='1'; g('pmNext').value=''; g('pmNote').value='';
+  g('pmErr').classList.remove('on'); afr(); suggestNextDate(); om('pmModal');
+}
+window.openPM = openPM;
+
+// Calculate a date N months ahead of a base date (YYYY-MM-DD)
+function addMonths(baseStr, n) {
+  const base = baseStr ? new Date(baseStr+'T00:00:00') : new Date();
+  const d = new Date(base);
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().split('T')[0];
+}
+window.addMonths = addMonths;
+
+// Render quick-pick chips (1mo, 2mo, 3mo...) based on months covered,
+// anchored to the tenant's existing next due date if present, else the payment date.
+function suggestNextDate() {
+  const wrap = g('pmQuick');
+  if (!wrap) return;
+  const tid    = g('pmTenant')?.value;
+  const t      = tenants.find(x=>x.id===tid);
+  const months = parseInt(g('pmMonths').value)||1;
+  const payDate= g('pmDate').value || today();
+  // anchor: if tenant already has a future/past nextDate, extend from there; else from payment date
+  const anchor = (t && t.nextDate) ? t.nextDate : payDate;
+
+  const options = [1,2,3,6,12].map(n => ({ n, date: addMonths(anchor, n) }));
+  wrap.innerHTML = options.map(o => `
+    <button type="button" class="btn btn-ghost btn-xs" onclick="pickNextDate('${o.date}')">${o.n} mo${o.n>1?'s':''}</button>
+  `).join('') + `<button type="button" class="btn btn-ghost btn-xs" onclick="pickNextDate('${addMonths(anchor, months)}')" style="border-color:var(--acc);color:var(--acc)">Match months covered (${months})</button>`;
+
+  // auto-fill the field with the "match months covered" suggestion if empty
+  if (!g('pmNext').value) g('pmNext').value = addMonths(anchor, months);
+}
+window.suggestNextDate = suggestNextDate;
+
+function pickNextDate(d) {
+  g('pmNext').value = d;
+}
+window.pickNextDate = pickNextDate;
+
+
+function openPMFor(id) { openPM(); g('pmTenant').value=id; afr(); suggestNextDate(); }
+window.openPMFor = openPMFor;
+
+function afr() {
+  const t=tenants.find(x=>x.id===g('pmTenant')?.value);
+  if(t) g('pmAmt').value=t.rent;
+  suggestNextDate();
+}
+window.afr = afr;
+
+async function savePayment() {
+  const tid=g('pmTenant').value;
+  const amt=parseFloat(g('pmAmt').value)||0;
+  const date=g('pmDate').value;
+  const months=parseInt(g('pmMonths').value)||1;
+  const nextDate=g('pmNext').value||null;
+  const notes=g('pmNote').value.trim();
+  if (!tid||!amt) { showErrEl('pmErr','Select a tenant and enter an amount.'); return; }
+  const btn=g('pmSave'); btn.classList.add('dim'); btn.textContent='Saving…';
+  try {
+    await addDoc(collection(db,'payments'), {
+      tenantId:tid, amount:amt, date, months, nextDate, notes,
+      createdAt:serverTimestamp(), loggedBy:currentUser.uid
+    });
+    const t=tenants.find(x=>x.id===tid);
+    if(t) {
+      await updateDoc(doc(db,'tenants',tid), {
+        amtPaid:   (num(t.amtPaid)+amt),
+        monthsPaid:(num(t.monthsPaid)+months),
+        nextDate:  nextDate||t.nextDate||null,
+        status:    'paid'
+      });
+    }
+    cm('pmModal'); toast('Payment logged ✓','s');
+  } catch(e) { showErrEl('pmErr',e.message); }
+  btn.classList.remove('dim'); btn.textContent='Log Payment';
+}
+window.savePayment = savePayment;
+
+// ═══════════════════════════════════════════
+// EXPOSE GLOBALS
+// ═══════════════════════════════════════════
+window.openTM      = openTM;
+window.openPM      = openPM;
+window.doSignout   = doSignout;
+window.cm          = cm;
+window.om          = om;
+window.confirmDel  = confirmDel;
+window.showDetail  = showDetail;
+window.gv          = gv;
+window.fv          = fv;
+window.authTab     = authTab;
+
+// Override render for users view async
+const _gv = gv;
+window.gv = function(v) {
+  if (v==='users') {
+    view=v;
+    document.querySelectorAll('[id^="n-"],[id^="tt-"]').forEach(el=>el.classList.remove('on'));
+    const ne=g('n-'+v),te=g('tt-'+v);
+    if(ne)ne.classList.add('on'); if(te)te.classList.add('on');
+    updateBadges(); vUsers();
+  } else { _gv(v); }
+};
+
+</script>
+
+<style>
+:root{
+  --bg:#07090f;--s1:#0f1219;--s2:#161b27;--s3:#1c2235;
+  --br:#232c42;--br2:#2d3a58;
+  --acc:#4f8eff;--acc-g:rgba(79,142,255,.12);
+  --grn:#00e5a0;--red:#ff4757;--ylw:#ffd32a;--pur:#a855f7;
+  --t1:#e8edf8;--t2:#8892b0;--t3:#4a5568;
+  --r:14px;--rs:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;overflow-x:hidden;}
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(79,142,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(79,142,255,.025) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0;}
+.bg-blob{position:fixed;border-radius:50%;filter:blur(130px);pointer-events:none;z-index:0;opacity:.5;}
+.bb1{width:500px;height:500px;background:rgba(79,142,255,.07);top:-150px;right:-100px;}
+.bb2{width:350px;height:350px;background:rgba(0,229,160,.05);bottom:-80px;left:-80px;}
+
+/* APP */
+#app{display:none;position:relative;z-index:1;}
+.topbar{padding:13px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--br);background:rgba(7,9,15,.88);backdrop-filter:blur(20px);position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:9px;cursor:pointer;}
+.logo-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--acc),#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.95rem;}
+.logo-txt{font-family:'Playfair Display',serif;font-size:1.05rem;}
+.top-nav{display:flex;gap:3px;background:var(--s1);border:1px solid var(--br);border-radius:var(--rs);padding:3px;}
+.tnav{padding:6px 14px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;color:var(--t2);transition:all .15s;}
+.tnav.on{background:var(--acc);color:#fff;}
+.tnav:hover:not(.on){color:var(--t1);}
+.top-right{display:flex;align-items:center;gap:9px;}
+.sync-wrap{display:flex;align-items:center;gap:5px;font-size:.7rem;color:var(--t3);}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 5px var(--grn);}
+.sdot.spin{animation:pulse 1s infinite;}
+.sdot.err{background:var(--red);box-shadow:0 0 5px var(--red);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.user-chip{display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--br);border-radius:20px;padding:4px 12px 4px 4px;cursor:pointer;}
+.user-chip:hover{border-color:var(--br2);}
+.uav{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--pur));display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;}
+.uname{font-size:.73rem;font-weight:600;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* LAYOUT */
+.body{display:flex;}
+.side{width:206px;min-height:calc(100vh - 56px);background:var(--s1);border-right:1px solid var(--br);padding:12px 9px;display:flex;flex-direction:column;gap:2px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;}
+.side-lbl{font-size:.57rem;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);padding:9px 10px 3px;font-weight:700;}
+.nav{padding:7px 10px;border-radius:var(--rs);cursor:pointer;font-size:.77rem;font-weight:500;color:var(--t2);transition:all .14s;display:flex;align-items:center;gap:8px;}
+.nav:hover{background:var(--s2);color:var(--t1);}
+.nav.on{background:var(--acc-g);color:var(--acc);border-left:2px solid var(--acc);padding-left:8px;}
+.nav-ic{font-size:.82rem;width:17px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--s3);color:var(--t3);font-size:.58rem;padding:2px 6px;border-radius:8px;font-weight:700;}
+.nav.on .nav-badge{background:var(--acc-g);color:var(--acc);}
+.content{flex:1;padding:22px 26px;overflow-y:auto;min-height:calc(100vh - 56px);}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:22px;}
+.sc{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+.sc:hover{border-color:var(--br2);transform:translateY(-2px);}
+.sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;}
+.sc.c1::after{background:linear-gradient(90deg,var(--acc),transparent);}
+.sc.c2::after{background:linear-gradient(90deg,var(--grn),transparent);}
+.sc.c3::after{background:linear-gradient(90deg,var(--ylw),transparent);}
+.sc.c4::after{background:linear-gradient(90deg,var(--red),transparent);}
+.sc-ic{font-size:1.3rem;margin-bottom:9px;}
+.sc-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:5px;}
+.sc-val{font-family:'JetBrains Mono',monospace;font-size:1.75rem;font-weight:500;line-height:1;}
+.sc-sub{font-size:.67rem;color:var(--t3);margin-top:4px;}
+.sc-tag{position:absolute;top:14px;right:14px;font-size:.62rem;padding:2px 7px;border-radius:8px;}
+.tag-up{background:rgba(0,229,160,.1);color:var(--grn);}
+.tag-dn{background:rgba(255,71,87,.1);color:var(--red);}
+
+/* CHARTS */
+.chart-row{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:22px;}
+.card{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:18px;}
+.card-title{font-size:.75rem;font-weight:600;color:var(--t2);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.card-title span:first-child{font-family:'Playfair Display',serif;font-size:.98rem;color:var(--t1);}
+.bars{display:flex;align-items:flex-end;gap:7px;height:110px;}
+.bw{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bar{width:100%;border-radius:4px 4px 0 0;transition:height .6s cubic-bezier(.34,1.56,.64,1);cursor:pointer;position:relative;min-height:3px;}
+.bar:hover::after{content:attr(data-v);position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--t1);background:var(--s3);padding:2px 5px;border-radius:4px;white-space:nowrap;}
+.bar-lbl{font-size:.57rem;color:var(--t3);text-align:center;}
+.donut-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.donut-svg{transform:rotate(-90deg);}
+.leg{display:flex;flex-direction:column;gap:6px;width:100%;}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:.72rem;}
+.leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.leg-lbl{color:var(--t2);flex:1;}
+.leg-val{font-family:'JetBrains Mono',monospace;font-size:.7rem;}
+.act-list{display:flex;flex-direction:column;}
+.act-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--br);}
+.act-item:last-child{border-bottom:none;}
+.act-ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;}
+.a-pay{background:rgba(0,229,160,.1);color:var(--grn);}
+.a-new{background:rgba(79,142,255,.1);color:var(--acc);}
+.a-due{background:rgba(255,71,87,.1);color:var(--red);}
+.act-body{flex:1;}
+.act-txt{font-size:.77rem;font-weight:500;line-height:1.4;}
+.act-time{font-size:.65rem;color:var(--t3);margin-top:1px;}
+.act-amt{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--grn);}
+.up-item{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--br);}
+.up-item:last-child{border-bottom:none;}
+.up-ic{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;}
+
+/* SECTION */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sec-title{font-family:'Playfair Display',serif;font-size:1.2rem;}
+.sec-acts{display:flex;gap:7px;align-items:center;}
+.srch{font-family:'Space Grotesk',sans-serif;background:var(--s1);border:1px solid var(--br);color:var(--t1);padding:8px 12px;border-radius:var(--rs);font-size:.77rem;outline:none;width:185px;transition:border-color .15s;}
+.srch:focus{border-color:var(--acc);}
+.srch::placeholder{color:var(--t3);}
+
+/* TENANT CARDS */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px;}
+.tc{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:16px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+.tc::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;}
+.tc.sp::before{background:var(--grn);}
+.tc.sd::before{background:var(--red);}
+.tc.sx::before{background:var(--ylw);}
+.tc:hover{border-color:var(--br2);transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.4);}
+.tc-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;}
+.tav{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
+.tn{font-weight:700;font-size:.86rem;line-height:1.3;}
+.ta{font-size:.67rem;color:var(--t3);}
+.badge{padding:2px 8px;border-radius:10px;font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+.bp{background:rgba(0,229,160,.1);color:var(--grn);border:1px solid rgba(0,229,160,.2);}
+.bd{background:rgba(255,71,87,.1);color:var(--red);border:1px solid rgba(255,71,87,.2);}
+.bx{background:rgba(255,211,42,.1);color:var(--ylw);border:1px solid rgba(255,211,42,.2);}
+.tm{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.ml{font-size:.57rem;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:1px;}
+.mv{font-family:'JetBrains Mono',monospace;font-size:.77rem;}
+.pbar{height:3px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.pfill{height:100%;border-radius:2px;transition:width .5s ease;}
+.tc-acts{display:flex;gap:5px;margin-top:10px;}
+
+/* TABLE */
+.tbl-wrap{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead th{padding:10px 14px;text-align:left;font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);background:var(--s2);border-bottom:1px solid var(--br);font-weight:700;}
+tbody tr{border-bottom:1px solid var(--br);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--s2);}
+tbody td{padding:11px 14px;font-size:.79rem;}
+.mono{font-family:'JetBrains Mono',monospace;}
+
+/* MODALS */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+.ov.on{opacity:1;pointer-events:all;}
+.modal{background:var(--s1);border:1px solid var(--br);border-radius:18px;padding:26px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;transform:scale(.95) translateY(10px);transition:transform .2s;box-shadow:0 40px 80px rgba(0,0,0,.6);}
+.ov.on .modal{transform:scale(1) translateY(0);}
+.modal-lg{width:560px;}
+.modal-sm{width:360px;}
+.mhd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.mtitle{font-family:'Playfair Display',serif;font-size:1.18rem;}
+.xbtn{width:28px;height:28px;border-radius:6px;background:var(--s2);border:none;cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;font-size:.82rem;transition:all .14s;}
+.xbtn:hover{background:var(--s3);color:var(--t1);}
+.macts{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--br);}
+
+/* DETAIL */
+.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:16px;}
+.di{background:var(--s2);border-radius:var(--rs);padding:11px;}
+.plog{display:flex;flex-direction:column;}
+.pl-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--br);}
+.pl-item:last-child{border-bottom:none;}
+.pl-ic{width:28px;height:28px;border-radius:7px;background:rgba(0,229,160,.1);color:var(--grn);display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0;}
+.pl-info{flex:1;}
+.pl-desc{font-size:.77rem;font-weight:600;}
+.pl-date{font-size:.64rem;color:var(--t3);margin-top:1px;}
+.pl-amt{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--grn);}
+
+/* USERS */
+.ulist{display:flex;flex-direction:column;gap:9px;}
+.urow{background:var(--s1);border:1px solid var(--br);border-radius:var(--rs);padding:13px 15px;display:flex;align-items:center;gap:11px;}
+.urow-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--pur));display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0;}
+.urow-info{flex:1;}
+.urow-name{font-size:.82rem;font-weight:600;}
+.urow-meta{font-size:.68rem;color:var(--t3);margin-top:1px;}
+.role-badge{padding:2px 8px;border-radius:8px;font-size:.58rem;font-weight:700;text-transform:uppercase;}
+.r-admin{background:rgba(168,85,247,.12);color:var(--pur);border:1px solid rgba(168,85,247,.2);}
+.r-viewer{background:rgba(79,142,255,.1);color:var(--acc);border:1px solid rgba(79,142,255,.2);}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;z-index:9999;background:var(--s1);border:1px solid var(--br);border-radius:11px;padding:11px 16px;font-size:.79rem;display:flex;align-items:center;gap:8px;transform:translateY(70px);opacity:0;transition:all .28s;box-shadow:0 18px 36px rgba(0,0,0,.45);max-width:280px;}
+.toast.on{transform:translateY(0);opacity:1;}
+.toast.ts{border-left:3px solid var(--grn);}
+.toast.te{border-left:3px solid var(--red);}
+.toast.ti{border-left:3px solid var(--acc);}
+
+/* EMPTY */
+.empty{text-align:center;padding:50px 20px;color:var(--t3);}
+.empty-ic{font-size:2.8rem;margin-bottom:10px;opacity:.5;}
+
+/* ANIMATIONS */
+.fade{animation:fd .35s ease;}
+@keyframes fd{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── SORT BAR ── */
+.sort-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.sort-btn{font-family:'Space Grotesk',sans-serif;padding:4px 11px;border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;background:var(--s1);border:1px solid var(--br);color:var(--t2);transition:all .15s;}
+.sort-btn:hover{border-color:var(--acc);color:var(--acc);}
+.sort-btn.sort-on{background:var(--acc-g);border-color:var(--acc);color:var(--acc);}
+
+/* ── APP FOOTER ── */
+.app-footer{text-align:center;padding:18px;font-size:.68rem;color:var(--t3);border-top:1px solid var(--br);background:var(--s1);}
+.app-footer strong{color:var(--t2);}
+
+@media(max-width:900px){.side{display:none;}.stats{grid-template-columns:1fr 1fr;}.chart-row{grid-template-columns:1fr;}.top-nav{display:none;}.content{padding:14px;}}
+@media(max-width:580px){.stats{grid-template-columns:1fr;}.tgrid{grid-template-columns:1fr;}}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--br);border-radius:3px;}
+
+/* ══════════════════════════════════════════
+   AUTH SCREEN — Cinematic CSS
+══════════════════════════════════════════ */
+#authCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+.auth-mesh{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.mesh-orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.6;}
+.m1{width:500px;height:500px;background:radial-gradient(circle,rgba(79,142,255,.2),transparent 70%);top:-150px;left:-100px;animation:meshFloat 14s ease-in-out infinite;}
+.m2{width:400px;height:400px;background:radial-gradient(circle,rgba(0,229,160,.15),transparent 70%);bottom:-100px;right:-80px;animation:meshFloat 11s ease-in-out infinite reverse;}
+.m3{width:300px;height:300px;background:radial-gradient(circle,rgba(168,85,247,.12),transparent 70%);top:40%;left:30%;animation:meshFloat 9s ease-in-out infinite 2s;}
+.m4{width:200px;height:200px;background:radial-gradient(circle,rgba(255,211,42,.08),transparent 70%);bottom:20%;left:10%;animation:meshFloat 13s ease-in-out infinite 1s;}
+@keyframes meshFloat{0%,100%{transform:translate(0,0) scale(1);}33%{transform:translate(20px,-30px) scale(1.08);}66%{transform:translate(-15px,20px) scale(.94);}}
+.auth-grid-overlay{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(79,142,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(79,142,255,.03) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;}
+.float-chips{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.float-chip{position:absolute;font-size:.68rem;font-weight:600;color:rgba(168,85,247,.4);border:1px solid rgba(168,85,247,.12);background:rgba(168,85,247,.04);padding:5px 11px;border-radius:20px;animation:chipFloat linear infinite;white-space:nowrap;}
+@keyframes chipFloat{0%{transform:translateY(0) rotate(-2deg);opacity:0;}15%{opacity:1;}85%{opacity:1;}100%{transform:translateY(-120px) rotate(2deg);opacity:0;}}
+#auth{position:fixed;inset:0;z-index:200;overflow:hidden;transition:opacity .4s ease,transform .4s ease;}
+.auth-layout{position:relative;z-index:1;display:grid;grid-template-columns:1fr 420px;min-height:100vh;}
+.auth-banner{padding:44px 52px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;border-right:1px solid rgba(255,255,255,.06);}
+.ab-top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:auto;}
+.ab-logo-row{display:flex;align-items:center;gap:12px;}
+.ab-logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--acc),#7c3aed);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 0 24px rgba(79,142,255,.4);animation:iconPulse 3s ease-in-out infinite alternate;}
+@keyframes iconPulse{from{box-shadow:0 0 20px rgba(79,142,255,.3);}to{box-shadow:0 0 40px rgba(79,142,255,.6),0 0 70px rgba(0,229,160,.2);}}
+.ab-brand{font-family:'Playfair Display',serif;font-size:1.25rem;letter-spacing:-.02em;}
+.ab-brand-sub{font-size:.58rem;color:var(--t3);letter-spacing:.14em;text-transform:uppercase;margin-top:1px;}
+.ab-dots{display:flex;gap:7px;align-items:center;}
+.ab-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);cursor:pointer;transition:all .25s;}
+.ab-dot.active{background:var(--acc);width:20px;border-radius:3px;}
+.ab-slides{flex:1;display:flex;align-items:center;padding:40px 0;}
+.ab-slide{display:none;animation:abSlideIn .5s cubic-bezier(.22,1,.36,1) both;}
+.ab-slide.active{display:block;}
+@keyframes abSlideIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.ab-tag{font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--acc);font-weight:700;margin-bottom:14px;}
+.ab-headline{font-family:'Playfair Display',serif;font-size:clamp(2rem,3.8vw,3.4rem);font-weight:900;line-height:1.1;letter-spacing:-.03em;margin-bottom:18px;}
+.ab-headline em{font-style:italic;opacity:.7;}
+.ab-gradient-txt{background:linear-gradient(135deg,var(--acc),var(--grn));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.ab-body{font-size:.88rem;color:var(--t2);line-height:1.7;max-width:420px;}
+.ab-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;}
+.ab-pill{font-size:.68rem;font-weight:600;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);color:var(--t2);transition:all .2s;}
+.ab-pill:hover{border-color:var(--acc);color:var(--acc);}
+.ab-stats{display:flex;align-items:center;gap:24px;margin-bottom:28px;}
+.ab-stat{text-align:center;}
+.ab-stat-num{font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;background:linear-gradient(135deg,#fff,var(--grn));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
+.ab-stat-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-top:3px;}
+.ab-stat-div{width:1px;height:30px;background:var(--br);}
+.ab-dev-credit{display:flex;align-items:center;gap:11px;}
+.ab-dev-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--pur));display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;}
+.ab-dev-name{font-size:.82rem;font-weight:700;}
+.ab-dev-role{font-size:.65rem;color:var(--t3);}
+.auth-right{display:flex;align-items:center;justify-content:center;padding:32px 24px;background:rgba(0,0,0,.2);}
+.auth-mobile-logo{display:none;align-items:center;gap:10px;margin-bottom:22px;}
+.auth-card{position:relative;background:rgba(15,18,25,.85);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:32px;width:100%;max-width:370px;box-shadow:0 30px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);transition:transform .25s cubic-bezier(.22,1,.36,1);}
+.card-glow-ring{position:absolute;inset:-1px;border-radius:22px;background:linear-gradient(135deg,rgba(79,142,255,.3),rgba(0,229,160,.2),rgba(168,85,247,.3));z-index:-1;filter:blur(8px);opacity:0;transition:opacity .4s;}
+.auth-card:hover .card-glow-ring{opacity:1;}
+.auth-card.shake{animation:cardShake .4s cubic-bezier(.36,.07,.19,.97) both;}
+@keyframes cardShake{10%,90%{transform:translateX(-3px);}20%,80%{transform:translateX(5px);}30%,50%,70%{transform:translateX(-6px);}40%,60%{transform:translateX(6px);}}
+.auth-tabs{position:relative;display:flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:3px;margin-bottom:22px;}
+.auth-tab-slider{position:absolute;top:3px;bottom:3px;border-radius:7px;background:var(--acc);transition:all .3s cubic-bezier(.22,1,.36,1);z-index:0;}
+.auth-tab{flex:1;padding:8px;text-align:center;border-radius:7px;font-size:.77rem;font-weight:600;cursor:pointer;color:var(--t2);transition:color .2s;position:relative;z-index:1;}
+.auth-tab.on{color:#fff;}
+.auth-form-header{margin-bottom:18px;}
+.afh-title{font-family:'Playfair Display',serif;font-size:1.35rem;font-weight:700;margin-bottom:4px;}
+.afh-sub{font-size:.75rem;color:var(--t3);}
+.auth-input-wrap{position:relative;display:flex;align-items:center;margin-bottom:0;}
+.auth-input-icon{position:absolute;left:13px;font-size:.82rem;pointer-events:none;z-index:2;line-height:1;}
+.auth-inp{width:100%;padding:11px 40px 11px 36px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);color:var(--t1);border-radius:10px;font-family:'Space Grotesk',sans-serif;font-size:.84rem;outline:none;transition:all .2s;}
+.auth-inp:focus{border-color:var(--acc);background:rgba(79,142,255,.05);box-shadow:0 0 0 3px rgba(79,142,255,.12);}
+.auth-inp::placeholder{color:var(--t3);}
+.auth-input-check{position:absolute;right:36px;font-size:.82rem;font-weight:700;transition:all .2s;}
+.auth-eye{position:absolute;right:12px;font-size:.78rem;cursor:pointer;user-select:none;z-index:2;}
+.pw-strength-wrap{display:flex;align-items:center;gap:9px;padding:0 2px;}
+.pw-bar{flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;}
+.pw-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0;}
+.pw-label{font-size:.67rem;font-weight:700;min-width:40px;text-align:right;}
+.auth-btn{width:100%;padding:12px 20px;background:linear-gradient(135deg,var(--acc),#3a6fd4);border:none;border-radius:11px;color:#fff;font-family:'Space Grotesk',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;position:relative;overflow:hidden;transition:all .2s;box-shadow:0 4px 20px rgba(79,142,255,.35);}
+.auth-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.15),transparent);opacity:0;transition:opacity .2s;}
+.auth-btn:hover::before{opacity:1;}
+.auth-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(79,142,255,.5);}
+.auth-btn-arrow{font-size:1rem;transition:transform .2s;}
+.auth-btn:hover .auth-btn-arrow{transform:translateX(4px);}
+.auth-btn.auth-btn-loading{opacity:.8;pointer-events:none;}
+.auth-btn.auth-btn-loading .auth-btn-txt::after{content:'';animation:ellipsisDots 1.2s infinite;}
+@keyframes ellipsisDots{0%{content:''}33%{content:'.'}66%{content:'..'}100%{content:'...'}}
+.auth-footer-note{text-align:center;font-size:.66rem;color:var(--t3);margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);}
+@media(max-width:860px){
+  .auth-layout{grid-template-columns:1fr;}
+  .auth-banner{display:none;}
+  .auth-right{min-height:100vh;padding:24px 16px;}
+  .auth-mobile-logo{display:flex;}
+}
+/* ══════════════════════════════════════════
+   LOADING SCREEN
+══════════════════════════════════════════ */
+#loadingScreen{position:fixed;inset:0;z-index:300;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .4s ease,transform .4s ease;}
+#loadCanvas{position:absolute;inset:0;z-index:0;}
+.ls-content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:0;}
+.ls-ring-wrap{position:relative;width:140px;height:140px;margin-bottom:28px;}
+.ls-ring{width:140px;height:140px;transform:rotate(-90deg);}
+.ls-ring-track{fill:none;stroke:rgba(255,255,255,.06);stroke-width:6;}
+.ls-ring-progress{fill:none;stroke:url(#lsGrad);stroke-width:6;stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset .8s cubic-bezier(.22,1,.36,1);filter:drop-shadow(0 0 8px rgba(79,142,255,.6));}
+.ls-icon-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2.4rem;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
+.ls-title{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;margin-bottom:24px;transition:opacity .3s;}
+.ls-steps{display:flex;flex-direction:column;gap:10px;min-width:220px;}
+.ls-step{display:flex;align-items:center;gap:11px;font-size:.8rem;color:var(--t3);transition:all .3s;}
+.ls-step.active{color:var(--t1);}
+.ls-step-dot{width:8px;height:8px;border-radius:50%;background:var(--t3);flex-shrink:0;transition:all .3s;}
+.ls-step.active .ls-step-dot{background:var(--grn);box-shadow:0 0 8px var(--grn);animation:stepPop .4s cubic-bezier(.34,1.56,.64,1);}
+@keyframes stepPop{from{transform:scale(0);}to{transform:scale(1);}}
+.ls-welcome{text-align:center;}
+.ls-welcome-name{font-family:'Playfair Display',serif;font-size:2rem;font-weight:900;background:linear-gradient(135deg,#fff,var(--grn));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;}
+.ls-welcome-msg{font-size:.88rem;color:var(--t2);}
+@keyframes lsWelcomeIn{from{opacity:0;transform:scale(.8) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.ls-burst{position:fixed;inset:0;z-index:2;pointer-events:none;}
+.burst-p{position:absolute;transform:translate(-50%,-50%);animation:burstOut 1s cubic-bezier(.22,1,.36,1) var(--del,0ms) both;}
+@keyframes burstOut{0%{transform:translate(-50%,-50%) translate(0,0) rotate(0);opacity:1;}100%{transform:translate(-50%,-50%) translate(var(--tx),var(--ty)) rotate(720deg);opacity:0;}}
+
+
+/* ── LIGHT THEME ── */
+[data-theme="light"]{
+  --bg:#f0f2f8;--s1:#ffffff;--s2:#f4f6fc;--s3:#e8ecf6;
+  --br:#d4d9ed;--br2:#b8bfd9;
+  --acc:#2563eb;--acc-g:rgba(37,99,235,.1);
+  --grn:#059669;--red:#dc2626;--ylw:#d97706;--pur:#7c3aed;
+  --t1:#0f172a;--t2:#475569;--t3:#94a3b8;
+}
+[data-theme="light"] .topbar{background:rgba(240,242,248,.95);}
+[data-theme="light"] .side{background:var(--s1);}
+[data-theme="light"] .bg-grid{background-image:linear-gradient(rgba(37,99,235,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.04) 1px,transparent 1px);}
+[data-theme="light"] .auth-banner{background:linear-gradient(160deg,#1e3a8a,#1d4ed8,#1e40af);}
+[data-theme="light"] .auth-banner .ab-headline,[data-theme="light"] .auth-banner .ab-feat-title,[data-theme="light"] .auth-banner .ab-quote{color:#fff;}
+[data-theme="light"] .auth-banner .ab-desc{color:rgba(255,255,255,.85);}
+[data-theme="light"] .auth-banner .ab-feat-sub{color:rgba(255,255,255,.65);}
+[data-theme="light"] .auth-banner .ab-feat{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.18);}
+[data-theme="light"] .auth-right{background:var(--bg);}
+[data-theme="light"] input,[data-theme="light"] select,[data-theme="light"] textarea{background:var(--s2);}
+[data-theme="light"] .wb-inner{background:linear-gradient(135deg,#eff6ff,#f0fdf4);}
+[data-theme="light"] .app-footer{background:var(--s1);}
+
+/* ── THEME TOGGLE SWITCH ── */
+.theme-toggle{width:46px;height:26px;border-radius:13px;cursor:pointer;position:relative;transition:background .25s;flex-shrink:0;border:none;display:inline-block;}
+.theme-toggle.dark{background:var(--s3);}
+.theme-toggle.light{background:var(--acc);}
+.theme-knob{position:absolute;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3);}
+.theme-toggle.dark .theme-knob{left:3px;}
+.theme-toggle.light .theme-knob{left:23px;}
+
+/* ── WELCOME BANNER (post-login) ── */
+#welcomeBanner{position:sticky;top:56px;z-index:89;animation:fd .4s ease;}
+.wb-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 24px;background:linear-gradient(135deg,rgba(79,142,255,.08),rgba(0,229,160,.05));border-bottom:1px solid var(--br);}
+.wb-icon{font-size:1.6rem;flex-shrink:0;margin-top:2px;}
+.wb-left{display:flex;align-items:flex-start;gap:14px;flex:1;}
+.wb-title{font-weight:700;font-size:.88rem;margin-bottom:3px;}
+.wb-desc{font-size:.77rem;color:var(--t2);line-height:1.5;}
+.wb-links{font-size:.73rem;color:var(--t3);margin-top:6px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.wb-email{color:var(--acc);text-decoration:none;font-weight:600;}
+.wb-email:hover{text-decoration:underline;}
+.wb-close{font-family:'Space Grotesk',sans-serif;background:transparent;border:1px solid var(--br);color:var(--t2);padding:6px 13px;border-radius:7px;font-size:.73rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;}
+.wb-close:hover{border-color:var(--acc);color:var(--acc);}
+/* ── CALENDAR ── */
+.cal-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px;}
+.cal-sum-item{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;gap:11px;}
+.cal-sum-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.cal-sum-val{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:500;line-height:1;}
+.cal-sum-lbl{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-top:3px;}
+.cal-wrap{background:var(--s1);border:1px solid var(--br);border-radius:var(--r);overflow:hidden;}
+.cal-month-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--br);}
+.cal-month-name{font-family:'Playfair Display',serif;font-size:1.15rem;}
+.cal-legend{display:flex;gap:14px;align-items:center;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
+.cal-dow{padding:9px 4px;text-align:center;font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);font-weight:700;background:var(--s2);border-bottom:1px solid var(--br);}
+.cal-cell{min-height:90px;border-right:1px solid var(--br);border-bottom:1px solid var(--br);padding:6px;cursor:pointer;transition:background .12s;position:relative;}
+.cal-cell:nth-child(7n){border-right:none;}
+.cal-cell:hover{background:var(--s2);}
+.cal-cell.cal-today{background:var(--acc-g);}
+.cal-cell.cal-today .cal-day-num{background:var(--acc);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+.cal-cell.cal-overdue{background:rgba(255,71,87,.05);}
+.cal-cell.cal-due{background:rgba(255,211,42,.04);}
+.cal-day-num{font-size:.78rem;font-weight:700;color:var(--t2);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+.cal-dots{display:flex;gap:3px;margin-bottom:4px;}
+.cal-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.dot-due{background:var(--ylw);}
+.dot-paid{background:var(--grn);}
+.cal-pills{display:flex;flex-direction:column;gap:2px;}
+.cal-pill{font-size:.6rem;font-weight:600;padding:2px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;max-width:100%;}
+.pill-due{background:rgba(255,211,42,.15);color:var(--ylw);border:1px solid rgba(255,211,42,.25);}
+.pill-ov{background:rgba(255,71,87,.15);color:var(--red);border:1px solid rgba(255,71,87,.25);}
+.pill-paid{background:rgba(0,229,160,.12);color:var(--grn);border:1px solid rgba(0,229,160,.2);}
+.pill-more{background:var(--s3);color:var(--t3);border:1px solid var(--br);}
+.cal-cell.cal-other .cal-day-num{color:var(--t3);}
+@media(max-width:700px){
+  .cal-cell{min-height:55px;}
+  .cal-pill{display:none;}
+  .cal-summary{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-blob bb1"></div>
+<div class="bg-blob bb2"></div>
+
+<!-- ════════════════════════════════════════
+     AUTH SCREEN — Cinematic Experience
+════════════════════════════════════════ -->
+<div id="auth">
+
+  <!-- Particle canvas behind everything -->
+  <canvas id="authCanvas"></canvas>
+
+  <!-- Animated gradient mesh -->
+  <div class="auth-mesh">
+    <div class="mesh-orb m1"></div>
+    <div class="mesh-orb m2"></div>
+    <div class="mesh-orb m3"></div>
+    <div class="mesh-orb m4"></div>
+  </div>
+
+  <!-- Grid overlay -->
+  <div class="auth-grid-overlay"></div>
+
+  <!-- Floating feature chips (decorative) -->
+  <div class="float-chips" id="floatChips"></div>
+
+  <!-- ── MAIN LAYOUT ── -->
+  <div class="auth-layout">
+
+    <!-- LEFT PANEL: Cinematic brand side -->
+    <div class="auth-banner" id="authBanner">
+
+      <!-- Top: logo + nav dots -->
+      <div class="ab-top-bar">
+        <div class="ab-logo-row">
+          <div class="ab-logo-icon" id="abLogoIcon">🏠</div>
+          <div>
+            <div class="ab-brand">RentTrack</div>
+            <div class="ab-brand-sub">Property Manager</div>
+          </div>
+        </div>
+        <div class="ab-dots">
+          <div class="ab-dot active" data-idx="0"></div>
+          <div class="ab-dot" data-idx="1"></div>
+          <div class="ab-dot" data-idx="2"></div>
+        </div>
+      </div>
+
+      <!-- Slide carousel -->
+      <div class="ab-slides" id="abSlides">
+        <!-- Slide 0 -->
+        <div class="ab-slide active">
+          <div class="ab-tag">✦ Property Management</div>
+          <h1 class="ab-headline">
+            Manage your<br>
+            <span class="ab-gradient-txt" id="abTypewriter">rental properties</span><br>
+            <em>with ease.</em>
+          </h1>
+          <p class="ab-body">One platform for every tenant, every payment, every due date. Built for landlords who want clarity, not complexity.</p>
+        </div>
+        <!-- Slide 1 -->
+        <div class="ab-slide">
+          <div class="ab-tag">✦ Real-Time Cloud</div>
+          <h1 class="ab-headline">Your data, <span class="ab-gradient-txt">everywhere</span><br>you go.</h1>
+          <p class="ab-body">Firebase-powered sync means every change appears instantly across every device. Your phone, laptop, tablet — all in perfect harmony.</p>
+        </div>
+        <!-- Slide 2 -->
+        <div class="ab-slide">
+          <div class="ab-tag">✦ Smart Reports</div>
+          <h1 class="ab-headline">Export <span class="ab-gradient-txt">beautiful</span><br>Excel reports.</h1>
+          <p class="ab-body">One click generates a full workbook — sorted by tenant, by month, or everything at once. Share with stakeholders instantly.</p>
+        </div>
+      </div>
+
+      <!-- Feature pills row -->
+      <div class="ab-pills">
+        <div class="ab-pill">☁️ Cloud Sync</div>
+        <div class="ab-pill">🔔 Notifications</div>
+        <div class="ab-pill">📊 Live Dashboard</div>
+        <div class="ab-pill">📅 Calendar</div>
+        <div class="ab-pill">📑 Excel Export</div>
+        <div class="ab-pill">👥 Multi-User</div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="ab-stats">
+        <div class="ab-stat"><div class="ab-stat-num">14</div><div class="ab-stat-lbl">Tenants</div></div>
+        <div class="ab-stat-div"></div>
+        <div class="ab-stat"><div class="ab-stat-num">∞</div><div class="ab-stat-lbl">Devices</div></div>
+        <div class="ab-stat-div"></div>
+        <div class="ab-stat"><div class="ab-stat-num">99%</div><div class="ab-stat-lbl">Uptime</div></div>
+      </div>
+
+      <!-- Developer credit -->
+      <div class="ab-dev-credit">
+        <div class="ab-dev-avatar">PK</div>
+        <div>
+          <div class="ab-dev-name">Priyash Kafle</div>
+          <div class="ab-dev-role">Lead Developer · RentTrack v2.0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Auth form -->
+    <div class="auth-right">
+
+      <!-- Glassmorphic card -->
+      <div class="auth-card" id="authCard">
+
+        <!-- Card glow ring -->
+        <div class="card-glow-ring"></div>
+
+        <!-- Logo (mobile only) -->
+        <div class="auth-mobile-logo">
+          <div class="auth-mark">🏠</div>
+          <div><div class="auth-brand" style="font-size:1.1rem">RentTrack</div></div>
+        </div>
+
+        <!-- Tab switcher -->
+        <div class="auth-tabs" id="authTabs">
+          <div class="auth-tab-slider" id="authTabSlider"></div>
+          <div class="auth-tab on" id="tabSignin" onclick="authTab('signin')">Sign In</div>
+          <div class="auth-tab" id="tabSignup" onclick="authTab('signup')">Create Account</div>
+        </div>
+
+        <!-- SIGNIN FORM -->
+        <div id="vSignin">
+          <div class="auth-form-header">
+            <div class="afh-title">Welcome back</div>
+            <div class="afh-sub">Sign in to your RentTrack account</div>
+          </div>
+          <div class="fg">
+            <div class="fgrp auth-input-wrap">
+              <div class="auth-input-icon">✉</div>
+              <input id="siEmail" type="email" placeholder="Email address" class="auth-inp" onkeydown="if(event.key==='Enter')doSignin()" oninput="validateAuthInput('siEmail')">
+              <div class="auth-input-check" id="siEmailCheck"></div>
+            </div>
+            <div class="fgrp auth-input-wrap">
+              <div class="auth-input-icon">🔒</div>
+              <input id="siPass" type="password" placeholder="Password" class="auth-inp" onkeydown="if(event.key==='Enter')doSignin()">
+              <div class="auth-eye" onclick="togglePass('siPass',this)" title="Show/hide">👁</div>
+            </div>
+            <div class="err" id="siErr"></div>
+            <button class="auth-btn" onclick="doSignin()" id="siBtn">
+              <span class="auth-btn-txt">Sign In</span>
+              <span class="auth-btn-arrow">→</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- SIGNUP FORM -->
+        <div id="vSignup" style="display:none">
+          <div class="auth-form-header">
+            <div class="afh-title">Create account</div>
+            <div class="afh-sub">Join RentTrack and take control</div>
+          </div>
+          <div class="fg">
+            <div class="fgrp auth-input-wrap">
+              <div class="auth-input-icon">👤</div>
+              <input id="suName" type="text" placeholder="Full name" class="auth-inp">
+            </div>
+            <div class="fgrp auth-input-wrap">
+              <div class="auth-input-icon">✉</div>
+              <input id="suEmail" type="email" placeholder="Email address" class="auth-inp">
+            </div>
+            <div class="fgrp auth-input-wrap">
+              <div class="auth-input-icon">🔒</div>
+              <input id="suPass" type="password" placeholder="Password (min 6 chars)" class="auth-inp">
+              <div class="auth-eye" onclick="togglePass('suPass',this)">👁</div>
+            </div>
+            <!-- Password strength bar -->
+            <div class="pw-strength-wrap" id="pwStrengthWrap" style="display:none">
+              <div class="pw-bar"><div class="pw-fill" id="pwFill"></div></div>
+              <div class="pw-label" id="pwLabel">Weak</div>
+            </div>
+            <div class="fgrp auth-input-wrap" style="padding-left:0">
+              <select id="suRole" class="auth-inp" style="padding-left:14px">
+                <option value="admin">👑 Admin — full access</option>
+                <option value="viewer">👁 Viewer — read only</option>
+              </select>
+            </div>
+            <div class="err" id="suErr"></div>
+            <button class="auth-btn" onclick="doSignup()" id="suBtn">
+              <span class="auth-btn-txt">Create Account</span>
+              <span class="auth-btn-arrow">→</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-footer-note">
+          Developed by <strong>Priyash Kafle</strong> · <a href="mailto:priyash504@gmail.com" style="color:var(--acc);text-decoration:none">priyash504@gmail.com</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     LOADING SCREEN — The WOW Moment
+════════════════════════════════════════ -->
+<div id="loadingScreen" style="display:none">
+  <canvas id="loadCanvas"></canvas>
+  <div class="ls-content">
+    <div class="ls-ring-wrap">
+      <svg class="ls-ring" viewBox="0 0 120 120">
+        <circle class="ls-ring-track" cx="60" cy="60" r="52"/>
+        <circle class="ls-ring-progress" id="lsProgress" cx="60" cy="60" r="52"/>
+      </svg>
+      <div class="ls-icon-center" id="lsIcon">🏠</div>
+    </div>
+    <div class="ls-title" id="lsTitle">Signing in…</div>
+    <div class="ls-steps" id="lsSteps">
+      <div class="ls-step" id="lst0"><div class="ls-step-dot"></div><span>Authenticating</span></div>
+      <div class="ls-step" id="lst1"><div class="ls-step-dot"></div><span>Loading profile</span></div>
+      <div class="ls-step" id="lst2"><div class="ls-step-dot"></div><span>Syncing tenants</span></div>
+      <div class="ls-step" id="lst3"><div class="ls-step-dot"></div><span>Preparing dashboard</span></div>
+    </div>
+    <div class="ls-welcome" id="lsWelcome" style="display:none">
+      <div class="ls-welcome-name" id="lsWelcomeName"></div>
+      <div class="ls-welcome-msg">Your dashboard is ready ✨</div>
+    </div>
+  </div>
+  <!-- Burst particles -->
+  <div class="ls-burst" id="lsBurst"></div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="logo" onclick="window.gv('dashboard')">
+      <div class="logo-mark">🏠</div>
+      <div class="logo-txt">RentTrack</div>
+    </div>
+    <div class="top-nav">
+      <div class="tnav on" id="tt-dashboard" onclick="window.gv('dashboard')">Dashboard</div>
+      <div class="tnav" id="tt-tenants" onclick="window.gv('tenants')">Tenants</div>
+      <div class="tnav" id="tt-payments" onclick="window.gv('payments')">Payments</div>
+      <div class="tnav" id="tt-calendar" onclick="window.gv('calendar')">Calendar</div>
+    </div>
+    <div class="top-right">
+      <div class="sync-wrap"><div class="sdot" id="syncDot"></div><span id="syncLbl">Live</span></div>
+      <button class="btn btn-ghost btn-sm" onclick="window.openTM()">+ Tenant</button>
+      <button class="btn btn-acc btn-sm" onclick="window.openPM()">+ Payment</button>
+      <div class="user-chip" onclick="window.gv('settings')">
+        <div class="uav" id="uav">?</div>
+        <div class="uname" id="uname">…</div>
+      </div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="side">
+      <div class="side-lbl">Main</div>
+      <div class="nav on" id="n-dashboard" onclick="window.gv('dashboard')"><span class="nav-ic">📊</span>Dashboard</div>
+      <div class="nav" id="n-tenants" onclick="window.gv('tenants')"><span class="nav-ic">🏘</span>Tenants<span class="nav-badge" id="nb-t">0</span></div>
+      <div class="nav" id="n-payments" onclick="window.gv('payments')"><span class="nav-ic">💳</span>Payments<span class="nav-badge" id="nb-p">0</span></div>
+      <div class="side-lbl" style="margin-top:7px">Filter</div>
+      <div class="nav" id="n-f-all" onclick="window.fv('all')"><span class="nav-ic">👥</span>All</div>
+      <div class="nav" id="n-f-paid" onclick="window.fv('paid')"><span class="nav-ic" style="color:var(--grn)">✓</span>Paid</div>
+      <div class="nav" id="n-f-due" onclick="window.fv('due')"><span class="nav-ic" style="color:var(--red)">!</span>Overdue</div>
+      <div class="nav" id="n-f-partial" onclick="window.fv('partial')"><span class="nav-ic" style="color:var(--ylw)">~</span>Partial</div>
+      <div class="side-lbl" style="margin-top:7px">Main</div>
+      <div class="nav" id="n-calendar" onclick="window.gv('calendar')"><span class="nav-ic">📅</span>Calendar</div>
+      <div class="side-lbl" style="margin-top:7px">Admin</div>
+      <div class="nav" id="n-reports" onclick="window.gv('reports')"><span class="nav-ic">📑</span>Reports</div>
+      <div class="nav" id="n-users" onclick="window.gv('users')"><span class="nav-ic">👤</span>Users</div>
+      <div class="nav" id="n-settings" onclick="window.gv('settings')"><span class="nav-ic">⚙</span>Settings</div>
+      <div class="nav" onclick="window.doSignout()" style="color:var(--red);margin-top:4px"><span class="nav-ic">↩</span>Sign Out</div>
+    </div>
+    <div class="content fade" id="content"></div>
+  </div>
+  <div class="app-footer">
+    Developed by <strong>Priyash Kafle</strong> · RentTrack v2.0 · All rights reserved
+  </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="ov" id="tmModal">
+  <div class="modal">
+    <div class="mhd"><div class="mtitle" id="tmTitle">Add Tenant</div><button class="xbtn" onclick="window.cm('tmModal')">✕</button></div>
+    <input type="hidden" id="tmId">
+    <div class="fg2">
+      <div class="fgrp full"><label>Full Name *</label><input id="tmName" placeholder="e.g. John Smith"></div>
+      <div class="fgrp"><label>Apartment / Unit *</label><input id="tmApt" placeholder="e.g. 4 Room Apt"></div>
+      <div class="fgrp"><label>Monthly Rent ($) *</label><input id="tmRent" type="number" min="0" placeholder="60"></div>
+      <div class="fgrp"><label>Phone</label><input id="tmPhone" placeholder="+231..."></div>
+      <div class="fgrp"><label>Status</label>
+        <select id="tmStatus"><option value="paid">Paid</option><option value="partial">Partial</option><option value="due">Due</option></select>
+      </div>
+      <div class="fgrp"><label>Next Due Date</label><input id="tmNext" type="date"></div>
+      <div class="fgrp"><label>Total Paid ($)</label><input id="tmPaid" type="number" min="0" placeholder="0"></div>
+      <div class="fgrp"><label>Months Paid</label><input id="tmMonths" type="number" min="0" placeholder="0"></div>
+      <div class="fgrp full"><label>Description</label><textarea id="tmDesc" placeholder="e.g. Long-term tenant, reliable payer, 2 occupants…" style="min-height:55px"></textarea></div>
+      <div class="fgrp full"><label>Notes</label><textarea id="tmNote" placeholder="Any notes…"></textarea></div>
+    </div>
+    <div class="err" id="tmErr"></div>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="window.cm('tmModal')">Cancel</button>
+      <button class="btn btn-acc" onclick="window.saveTenant()" id="tmSave">Save Tenant</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="pmModal">
+  <div class="modal">
+    <div class="mhd"><div class="mtitle">Log Payment</div><button class="xbtn" onclick="window.cm('pmModal')">✕</button></div>
+    <div class="fg2">
+      <div class="fgrp full"><label>Tenant *</label><select id="pmTenant" onchange="window.afr()"></select></div>
+      <div class="fgrp"><label>Amount ($) *</label><input id="pmAmt" type="number" min="0" placeholder="60"></div>
+      <div class="fgrp"><label>Date</label><input id="pmDate" type="date" oninput="suggestNextDate()"></div>
+      <div class="fgrp"><label>Months Covered</label><input id="pmMonths" type="number" min="1" placeholder="1" oninput="suggestNextDate()"></div>
+      <div class="fgrp full">
+        <label>Next Due Date</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap" id="pmQuick"></div>
+        <input id="pmNext" type="date">
+      </div>
+      <div class="fgrp full"><label>Notes</label><input id="pmNote" placeholder="e.g. Cash — January rent"></div>
+    </div>
+    <div class="err" id="pmErr"></div>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="window.cm('pmModal')">Cancel</button>
+      <button class="btn btn-acc" onclick="window.savePayment()" id="pmSave">Log Payment</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="dtModal">
+  <div class="modal modal-lg">
+    <div class="mhd"><div class="mtitle" id="dtTitle"></div><button class="xbtn" onclick="window.cm('dtModal')">✕</button></div>
+    <div id="dtBody"></div>
+  </div>
+</div>
+
+<div class="ov" id="cfModal">
+  <div class="modal modal-sm">
+    <div class="mhd"><div class="mtitle" id="cfTitle">Confirm</div><button class="xbtn" onclick="window.cm('cfModal')">✕</button></div>
+    <p id="cfMsg" style="color:var(--t2);font-size:.82rem;line-height:1.6;margin-bottom:4px"></p>
+    <div class="macts">
+      <button class="btn btn-ghost" onclick="window.cm('cfModal')">Cancel</button>
+      <button class="btn btn-red" id="cfOk">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// AUTH CANVAS — Floating particles behind
+// ══════════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('authCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, pts = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); init(); });
+
+  const COLORS = ['#4f8eff33','#00e5a033','#a855f733','#ffd32a22','#00f5d422'];
+  const ICONS  = ['🏠','🔑','💳','📊','🏘','💰'];
+
+  class Pt {
+    constructor() { this.reset(true); }
+    reset(init) {
+      this.x  = Math.random()*W;
+      this.y  = init ? Math.random()*H : H+40;
+      this.vy = -(Math.random()*0.3+0.08);
+      this.vx = (Math.random()-.5)*0.2;
+      this.a  = Math.random()*0.12+0.02;
+      this.r  = Math.random()*60+30;
+      this.color = COLORS[Math.floor(Math.random()*COLORS.length)];
+      this.life = 0; this.max = Math.random()*300+200;
+    }
+    tick() {
+      this.x+=this.vx; this.y+=this.vy; this.life++;
+      if (this.y<-80||this.life>this.max) this.reset(false);
+    }
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.a * Math.sin(this.life/this.max*Math.PI);
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function init() { pts = Array.from({length:12}, ()=>new Pt()); }
+  init();
+
+  let mx=W/2, my=H/2;
+  document.addEventListener('mousemove', e=>{ mx=e.clientX; my=e.clientY; });
+
+  let af;
+  function loop() {
+    ctx.clearRect(0,0,W,H);
+    pts.forEach(p=>{ p.tick(); p.draw(); });
+
+    // Draw subtle connecting mesh
+    for(let i=0;i<pts.length;i++){
+      for(let j=i+1;j<pts.length;j++){
+        const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<200){
+          ctx.save();
+          ctx.globalAlpha=(1-d/200)*0.05;
+          ctx.strokeStyle='#4f8eff';
+          ctx.lineWidth=1;
+          ctx.beginPath();
+          ctx.moveTo(pts[i].x,pts[i].y);
+          ctx.lineTo(pts[j].x,pts[j].y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+    af = requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+// ══════════════════════════════════════════
+// AUTH SLIDE CAROUSEL
+// ══════════════════════════════════════════
+(function() {
+  let cur = 0;
+  const slides = document.querySelectorAll('.ab-slide');
+  const dots   = document.querySelectorAll('.ab-dot');
+  if (!slides.length) return;
+
+  function goTo(idx) {
+    slides[cur].classList.remove('active');
+    dots[cur].classList.remove('active');
+    cur = (idx + slides.length) % slides.length;
+    slides[cur].classList.add('active');
+    dots[cur].classList.add('active');
+  }
+
+  dots.forEach(d => d.addEventListener('click', ()=>goTo(parseInt(d.dataset.idx))));
+  setInterval(() => goTo(cur+1), 4000);
+})();
+
+// ══════════════════════════════════════════
+// PASSWORD STRENGTH METER
+// ══════════════════════════════════════════
+const suPassEl = document.getElementById('suPass');
+if (suPassEl) {
+  suPassEl.addEventListener('input', function() {
+    const wrap = g('pwStrengthWrap');
+    const fill = g('pwFill');
+    const lbl  = g('pwLabel');
+    if (!wrap) return;
+    const v = this.value;
+    if (!v) { wrap.style.display='none'; return; }
+    wrap.style.display='flex';
+    const score = checkPwStrength(v);
+    const pct   = (score/4)*100;
+    const cols  = ['#ff4757','#ffd32a','#4f8eff','#00e5a0'];
+    const lbls  = ['Weak','Fair','Good','Strong'];
+    fill.style.width   = pct+'%';
+    fill.style.background = cols[score-1] || '#ff4757';
+    lbl.textContent = lbls[score-1] || 'Weak';
+    lbl.style.color   = cols[score-1] || '#ff4757';
+  });
+}
+
+// ══════════════════════════════════════════
+// FLOATING FEATURE CHIPS (decorative)
+// ══════════════════════════════════════════
+(function() {
+  const wrap = document.getElementById('floatChips');
+  if (!wrap) return;
+  const chips = ['☁️ Cloud Sync','🔔 Alerts','📊 Dashboard','📅 Calendar','📑 Reports','👥 Teams','🔐 Secure','💳 Payments','🏠 Tenants'];
+  chips.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'float-chip';
+    el.textContent = c;
+    el.style.cssText = `
+      left:${5+Math.random()*85}%;
+      top:${5+Math.random()*85}%;
+      animation-delay:${i*0.7}s;
+      animation-duration:${6+Math.random()*4}s;`;
+    wrap.appendChild(el);
+  });
+})();
+
+// ══════════════════════════════════════════
+// AUTH CARD mouse-tilt
+// ══════════════════════════════════════════
+(function() {
+  const card = document.getElementById('authCard');
+  if (!card) return;
+  card.addEventListener('mousemove', e => {
+    const r   = card.getBoundingClientRect();
+    const cx  = r.left + r.width/2;
+    const cy  = r.top  + r.height/2;
+    const rx  = ((e.clientY - cy) / r.height) * 5;
+    const ry  = -((e.clientX - cx) / r.width) * 5;
+    card.style.transform = `perspective(800px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+  });
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = '';
+  });
+})();
+
+// Initialize auth tab slider position on load
+window.addEventListener('load', () => {
+  authTab('signin');
+});
+
+// Close modals on backdrop click
+document.querySelectorAll('.ov').forEach(el=>{
+  el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('on'); });
+});
+</script>
+</body>
+</html>
